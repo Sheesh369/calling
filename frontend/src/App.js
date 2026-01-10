@@ -46,7 +46,7 @@ const colors = {
   borderLight: 'rgb(244, 235, 226)',
 };
 
-// Add global styles for hover effects
+// Add global styles for hover effects and animations
 const globalStyles = `
   .logout-button:hover {
     background: rgb(150, 133, 117) !important;
@@ -67,6 +67,10 @@ const globalStyles = `
   }
   .password-submit-button:hover {
     background: rgb(100, 89, 78) !important;
+  }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 `;
 
@@ -1929,13 +1933,6 @@ export default function HummingBirdMultiAgent() {
           </p>
         </div>
       </footer>
-
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
 
       {/* Change Password Modal */}
       {showPasswordModal && (
