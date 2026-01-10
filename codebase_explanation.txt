@@ -1,0 +1,86 @@
+Hummingbird Payment Reminder System - Codebase Explanation
+
+System Overview:
+The Hummingbird Payment Reminder System is a multi-channel automated payment follow-up platform designed to contact customers via Voice Calls, WhatsApp, and Email. It uses a Streamlit frontend for user interaction and a FastAPI backend to manage communications and state. The system leverages AI (OpenAI and Gemini) for generating conversational responses and call summaries.
+
+Key Components:
+
+1. Frontend (app.py):
+   - Built with Streamlit.
+   - Provides an interactive dashboard for initiating Voice Calls, WhatsApp messages, and Emails.
+   - Allows users to upload customer data via Excel/CSV files.
+   - Features real-time status updates for ongoing calls and message delivery.
+   - Displays transcripts and AI-generated summaries of voice calls.
+   - Communicates with the backend via REST API calls.
+
+2. Backend Server (server.py):
+   - Built with FastAPI.
+   - Endpoints:
+     - GET /health: Checks system health and configuration status.
+     - POST /start: Initiates outbound voice calls via Plivo.
+     - POST /whatsapp/send: Sends WhatsApp messages.
+     - POST /email/send: Sends email reminders.
+     - GET /calls: Retrieves status of all calls.
+     - GET /transcripts: Lists all call transcripts.
+     - GET /transcripts/{filename}: Retrieves content of specific transcripts.
+   - Manages WebSocket connections for real-time voice interaction (Pipecat integration).
+   - Handles call lifecycle (initiation, connection, completion, failure).
+   - Implementing a background task to detect and update stale calls.
+
+3. Voice Agent (bot.py):
+   - Powered by Pipecat framework.
+   - Integrated with:
+     - Google Gemini (Flash 2.5) for LLM intelligence.
+     - Sarvam AI for Speech-to-Text (STT) and Text-to-Speech (TTS).
+     - OpenAI for generating post-call summaries.
+   - Supports multilingual conversations (English, Tamil, Hindi, Telugu, Malayalam, Kannada).
+   - Features language detection and switching based on user preference.
+   - Saves real-time transcripts to local files.
+
+4. Communication Services:
+   - WhatsApp (whatsapp_service.py): Uses Meta's Graph API to send text and template messages.
+   - Email (email_service.py): Uses SMTP (specifically Gmail in current config) to send HTML/Text emails.
+   - Plivo (integrated in server.py/bot.py): Handles telephony for outbound calls.
+
+5. Utilities:
+   - webhook.py: Handles meta webhook verification for WhatsApp.
+   - wp.py: Standalone script/module for WhatsApp functions (similar to whatsapp_service.py but seemingly a dev/test utility).
+   - dont_touch.py: Empty file, likely a placeholder or legacy.
+
+6. Infrastructure:
+   - Dockerfile: Defines the container environment (Python 3.11, system dependencies like ffmpeg).
+   - pyproject.toml: Manages Python dependencies (using 'uv' package manager).
+
+Data Flow:
+1. User uploads Excel file to Streamlit App.
+2. User selects channel (Voice, WhatsApp, Email) and initiates action.
+3. specific endpoint in FastAPI backend is called.
+4. For Voice:
+   - Plivo initiates call.
+   - On answer, Plivo calls back to server (XML response).
+   - Call connects to WebSocket endpoint.
+   - `bot.py` takes over, managing the audio stream and conversation logic using Pipecat pipeline.
+   - Transcript is saved to disk and summary generated post-call.
+5. For WhatsApp/Email:
+   - Service functions form payload and call respective external APIs.
+   - Status is returned to frontend.
+
+Dependencies:
+- Python 3.11+
+- FastAPI, Uvicorn (Web Server)
+- Streamlit (Frontend)
+- Pipecat AI (Voice pipeline)
+- OpenAI, Google Generative AI (LLMs)
+- Requests, Httpx (HTTP clients)
+- Pandas, Openpyxl (Data processing)
+- Python-dotenv (Environment management)
+
+Environment Variables (.env):
+- API Keys: OPENAI_API_KEY, SARVAM_API_KEY, GOOGLE_API_KEY
+- Services: PLIVO_AUTH_ID, PLIVO_AUTH_TOKEN, WHATSAPP_ACCESS_TOKEN, SMTP_PASSWORD, etc.
+- Config: SERVER_URL, VERIFY_TOKEN
+
+Current State Observations:
+- "dont_touch.py" is empty.
+- Frontend code (app.py) is quite robust with error handling and real-time updates.
+- Voice bot has sophisticated language handling (regex-based detection).
