@@ -5,12 +5,9 @@ import {
   Mail,
   Upload,
   RefreshCw,
-  CheckCircle,
   XCircle,
   Loader2,
-  Download,
   FileText,
-  TrendingUp,
   Activity,
   Search,
   Eye,
@@ -101,7 +98,6 @@ export default function HummingBirdMultiAgent() {
   // Super Admin states
   const [selectedUserId, setSelectedUserId] = useState(null); // null = own data, 0 = all users, number = specific user
   const [allUsers, setAllUsers] = useState([]);
-  const [showAdminPanel, setShowAdminPanel] = useState(false);
   
   // Password change modal states
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -110,7 +106,6 @@ export default function HummingBirdMultiAgent() {
   const [passwordSuccess, setPasswordSuccess] = useState('');
 
   // Fixed delays - not exposed to user
-  const VOICE_DELAY = 420; // 7 minutes in seconds
   const MESSAGE_DELAY = 3; // 3 seconds
 
   useEffect(() => {
@@ -151,6 +146,7 @@ export default function HummingBirdMultiAgent() {
     } else if (activeVoiceTab === 'transcripts') {
       fetchTranscripts();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUserId]);
 
   // Auto-fetch transcripts when switching to transcripts tab

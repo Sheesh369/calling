@@ -6,8 +6,11 @@ from loguru import logger
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class Database:
-    def __init__(self, db_path="users.db"):
+    def __init__(self, db_path="data/users.db"):
         self.db_path = db_path
+        # Ensure data directory exists
+        import os
+        os.makedirs(os.path.dirname(db_path), exist_ok=True)
         self.init_db()
     
     def get_connection(self):
