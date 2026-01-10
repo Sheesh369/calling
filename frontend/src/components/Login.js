@@ -14,6 +14,12 @@ const colors = {
   borderLight: 'rgb(244, 235, 226)',
 };
 
+const loginStyles = `
+  .login-submit-button:not(:disabled):hover {
+    background: rgb(100, 89, 78) !important;
+  }
+`;
+
 const HummingBirdLogo = () => (
   <img src={logo} alt="HummingBird Logo" style={{ width: "120px", height: "80px", objectFit: "contain" }} />
 );
@@ -42,12 +48,14 @@ export default function Login() {
   };
 
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'center',
-      background: colors.backgroundSecondary,
+    <>
+      <style>{loginStyles}</style>
+      <div style={{ 
+        minHeight: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        background: colors.backgroundSecondary,
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
     }}>
       <div style={{ 
@@ -182,11 +190,6 @@ export default function Login() {
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
-          <style>{`
-            .login-submit-button:not(:disabled):hover {
-              background: ${colors.primaryHover} !important;
-            }
-          `}</style>
         </form>
 
         <div style={{ 
@@ -200,6 +203,7 @@ export default function Login() {
           </p>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

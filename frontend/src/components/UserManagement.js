@@ -34,6 +34,31 @@ const UserManagement = () => {
     info: '#0dcaf0'
   };
 
+  const userManagementStyles = `
+    .back-button:hover {
+      background-color: rgb(244, 235, 226) !important;
+      border-color: rgb(150, 133, 117) !important;
+    }
+    .create-user-button:hover {
+      background-color: rgb(100, 89, 78) !important;
+    }
+    .toggle-active-button:hover {
+      opacity: 0.9;
+    }
+    .reset-password-button:hover {
+      opacity: 0.9;
+    }
+    .delete-button:hover {
+      opacity: 0.9;
+    }
+    .cancel-button:hover {
+      background-color: rgb(244, 235, 226) !important;
+    }
+    .submit-button:hover {
+      background-color: rgb(100, 89, 78) !important;
+    }
+  `;
+
   useEffect(() => {
     fetchUsers();
   }, []);
@@ -152,8 +177,10 @@ const UserManagement = () => {
   };
 
   return (
-    <div style={{ padding: '2rem', backgroundColor: colors.backgroundSecondary, minHeight: '100vh' }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <>
+      <style>{userManagementStyles}</style>
+      <div style={{ padding: '2rem', backgroundColor: colors.backgroundSecondary, minHeight: '100vh' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         {/* Back Button */}
         <button
           onClick={() => navigate('/dashboard')}
@@ -581,38 +608,8 @@ const UserManagement = () => {
           </div>
         )}
       </div>
-      
-      <style>{`
-        .back-button:hover {
-          background-color: ${colors.backgroundSecondary} !important;
-          border-color: ${colors.primary} !important;
-        }
-        
-        .create-user-button:hover {
-          background-color: ${colors.primaryHover} !important;
-        }
-        
-        .toggle-active-button:hover {
-          opacity: 0.9;
-        }
-        
-        .reset-password-button:hover {
-          opacity: 0.9;
-        }
-        
-        .delete-button:hover {
-          opacity: 0.9;
-        }
-        
-        .cancel-button:hover {
-          background-color: ${colors.borderLight} !important;
-        }
-        
-        .submit-button:hover {
-          background-color: ${colors.primaryHover} !important;
-        }
-      `}</style>
-    </div>
+      </div>
+    </>
   );
 };
 

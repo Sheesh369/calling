@@ -49,6 +49,30 @@ const colors = {
   borderLight: 'rgb(244, 235, 226)',
 };
 
+// Add global styles for hover effects
+const globalStyles = `
+  .logout-button:hover {
+    background: rgb(150, 133, 117) !important;
+    color: white !important;
+  }
+  .manage-users-button:hover {
+    background: rgb(100, 89, 78) !important;
+  }
+  .change-password-button:hover {
+    background: rgb(244, 235, 226) !important;
+  }
+  .transcript-card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border-color: rgb(150, 133, 117) !important;
+  }
+  .modal-close-button:hover {
+    background: rgb(244, 235, 226) !important;
+  }
+  .password-submit-button:hover {
+    background: rgb(100, 89, 78) !important;
+  }
+`;
+
 const HummingBirdLogo = () => (
   <img src={logo} alt="HummingBird Logo" style={{ width: "120px", height: "80px", objectFit: "contain" }} />
 );
@@ -119,6 +143,15 @@ export default function HummingBirdMultiAgent() {
     }
     return () => clearInterval(interval);
   }, [autoRefresh, agentType, activeVoiceTab]);
+
+  // Fetch data when selectedUserId changes (fixes filter race condition)
+  useEffect(() => {
+    if (activeVoiceTab === 'status') {
+      fetchCallStatus();
+    } else if (activeVoiceTab === 'transcripts') {
+      fetchTranscripts();
+    }
+  }, [selectedUserId]);
 
   // Auto-fetch transcripts when switching to transcripts tab
   useEffect(() => {
@@ -1081,12 +1114,6 @@ export default function HummingBirdMultiAgent() {
                   }}
                   onClick={() => handleTranscriptClick(transcript)}
                 >
-                  <style>{`
-                    .transcript-card:hover {
-                      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                      border-color: ${colors.primary} !important;
-                    }
-                  `}</style>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
                     <div style={{ flex: 1 }}>
                       <h4 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: '0.5rem', color: colors.text }}>
@@ -1231,11 +1258,6 @@ export default function HummingBirdMultiAgent() {
                 >
                   <X size={24} color={colors.text} />
                 </button>
-                <style>{`
-                  .modal-close-button:hover {
-                    background: ${colors.backgroundSecondary} !important;
-                  }
-                `}</style>
               </div>
 
               {/* Modal Body */}
@@ -1613,17 +1635,19 @@ export default function HummingBirdMultiAgent() {
   );
 
   return (
-    <div style={{ minHeight: '100vh', background: '#FAFAFA', fontFamily: '"Cormorant Garamond", "Playfair Display", serif' }}>
-      <head>
-        <link
-          href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <>
+      <style>{globalStyles}</style>
+      <div style={{ minHeight: '100vh', background: '#FAFAFA', fontFamily: '"Cormorant Garamond", "Playfair Display", serif' }}>
+        <head>
+          <link
+            href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
+            rel="stylesheet"
+          />
+        </head>
 
-      {/* Header */}
-      <header style={{
-        background: colors.background,
+        {/* Header */}
+        <header style={{
+          background: colors.background,
         borderBottom: `1px solid ${colors.borderLight}`,
         padding: '1.25rem 0',
         position: 'sticky',
@@ -1728,11 +1752,6 @@ export default function HummingBirdMultiAgent() {
                     <Users size={16} />
                     Manage Users
                   </button>
-                  <style>{`
-                    .manage-users-button:hover {
-                      background: ${colors.primaryHover} !important;
-                    }
-                  `}</style>
                 </>
               )}
               
@@ -1754,11 +1773,6 @@ export default function HummingBirdMultiAgent() {
               >
                 Change Password
               </button>
-              <style>{`
-                .change-password-button:hover {
-                  background: ${colors.borderLight} !important;
-                }
-              `}</style>
               
               <div style={{ textAlign: 'right' }}>
                 <p style={{ fontSize: '0.875rem', fontWeight: '600', color: colors.text, margin: 0 }}>
@@ -1792,12 +1806,6 @@ export default function HummingBirdMultiAgent() {
                 <LogOut size={16} />
                 Logout
               </button>
-              <style>{`
-                .logout-button:hover {
-                  background: ${colors.primary} !important;
-                  color: white !important;
-                }
-              `}</style>
             </div>
 
             {/* Backend Status */}
@@ -2100,16 +2108,12 @@ export default function HummingBirdMultiAgent() {
                 >
                   Change Password
                 </button>
-                <style>{`
-                  .password-submit-button:hover {
-                    background: ${colors.primaryHover} !important;
-                  }
-                `}</style>
               </div>
             </form>
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

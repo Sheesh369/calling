@@ -28,6 +28,7 @@ services:
       - ./transcripts:/app/transcripts
       - ./greetings:/app/greetings
       - ./customer_data:/app/customer_data
+      - ./users.db:/app/users.db  # Persist database across restarts
     restart: unless-stopped
     environment:
       - ENV=production
