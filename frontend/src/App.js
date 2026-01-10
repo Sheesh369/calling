@@ -78,6 +78,12 @@ export default function HummingBirdMultiAgent() {
   const [selectedUserId, setSelectedUserId] = useState(null); // null = own data, 0 = all users, number = specific user
   const [allUsers, setAllUsers] = useState([]);
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  
+  // Password change modal states
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
 
   // Fixed delays - not exposed to user
   const VOICE_DELAY = 420; // 7 minutes in seconds
@@ -425,6 +431,48 @@ export default function HummingBirdMultiAgent() {
 
     setEmailMessages(prev => [...emails, ...prev]);
     setIsProcessing(false);
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    // Validate passwords match
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError('New passwords do not match');
+      return;
+    }
+
+    // Validate password length
+    if (passwordForm.newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters long');
+      return;
+    }
+
+    try {
+      const response = await fetchWithAuth(`${BACKEND_URL}/api/auth/change-password`, {
+        method: 'POST',
+        body: JSON.stringify({
+          old_password: passwordForm.oldPassword,
+          new_password: passwordForm.newPassword
+        })
+      });
+
+      if (response.ok) {
+        setPasswordSuccess('Password changed successfully!');
+        setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+        setTimeout(() => {
+          setShowPasswordModal(false);
+          setPasswordSuccess('');
+        }, 2000);
+      } else {
+        const data = await response.json();
+        setPasswordError(data.detail || 'Failed to change password');
+      }
+    } catch (err) {
+      setPasswordError('Network error. Please try again.');
+    }
   };
 
   const renderAgentSelector = () => (
@@ -1640,6 +1688,60 @@ export default function HummingBirdMultiAgent() {
 
             {/* User Info & Logout */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              {/* User Management Button - Only for Super Admin */}
+              {user?.role === 'super_admin' && (
+                <button
+                  onClick={() => navigate('/users')}
+                  style={{
+                    padding: '0.5rem 1rem',
+                    background: colors.primary,
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.875rem',
+                    fontWeight: '500',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = colors.primaryHover;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = colors.primary;
+                  }}
+                >
+                  <Users size={16} />
+                  Manage Users
+                </button>
+              )}
+              
+              {/* Change Password Button - For All Users */}
+              <button
+                onClick={() => setShowPasswordModal(true)}
+                style={{
+                  padding: '0.5rem 1rem',
+                  background: colors.backgroundSecondary,
+                  color: colors.text,
+                  border: `1px solid ${colors.borderLight}`,
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = colors.borderLight;
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = colors.backgroundSecondary;
+                }}
+              >
+                Change Password
+              </button>
+              
               <div style={{ textAlign: 'right' }}>
                 <p style={{ fontSize: '0.875rem', fontWeight: '600', color: colors.text, margin: 0 }}>
                   {user?.username}
@@ -1813,6 +1915,180 @@ export default function HummingBirdMultiAgent() {
           to { transform: rotate(360deg); }
         }
       `}</style>
+
+      {/* Change Password Modal */}
+      {showPasswordModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '2rem'
+        }}
+          onClick={() => setShowPasswordModal(false)}
+        >
+          <div style={{
+            background: colors.background,
+            borderRadius: '12px',
+            maxWidth: '500px',
+            width: '100%',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+            padding: '2rem'
+          }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ fontSize: '1.25rem', fontWeight: '600', margin: '0 0 1.5rem 0', color: colors.text }}>
+              Change Password
+            </h2>
+
+            <form onSubmit={handleChangePassword}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '500', color: colors.text }}>
+                  Current Password
+                </label>
+                <input
+                  type="password"
+                  value={passwordForm.oldPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: `1px solid ${colors.borderLight}`,
+                    borderRadius: '6px',
+                    fontSize: '0.9375rem',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = colors.primary}
+                  onBlur={(e) => e.target.style.borderColor = colors.borderLight}
+                />
+              </div>
+
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '500', color: colors.text }}>
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  value={passwordForm.newPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: `1px solid ${colors.borderLight}`,
+                    borderRadius: '6px',
+                    fontSize: '0.9375rem',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = colors.primary}
+                  onBlur={(e) => e.target.style.borderColor = colors.borderLight}
+                />
+              </div>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '500', color: colors.text }}>
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                  required
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: `1px solid ${colors.borderLight}`,
+                    borderRadius: '6px',
+                    fontSize: '0.9375rem',
+                    outline: 'none',
+                    boxSizing: 'border-box'
+                  }}
+                  onFocus={(e) => e.target.style.borderColor = colors.primary}
+                  onBlur={(e) => e.target.style.borderColor = colors.borderLight}
+                />
+              </div>
+
+              {passwordError && (
+                <div style={{
+                  padding: '0.75rem',
+                  background: '#FFEBEE',
+                  border: '1px solid #FFCDD2',
+                  borderRadius: '6px',
+                  marginBottom: '1rem'
+                }}>
+                  <p style={{ color: '#C62828', fontSize: '0.875rem', margin: 0 }}>
+                    {passwordError}
+                  </p>
+                </div>
+              )}
+
+              {passwordSuccess && (
+                <div style={{
+                  padding: '0.75rem',
+                  background: '#E8F5E9',
+                  border: '1px solid #C8E6C9',
+                  borderRadius: '6px',
+                  marginBottom: '1rem'
+                }}>
+                  <p style={{ color: '#2E7D32', fontSize: '0.875rem', margin: 0 }}>
+                    {passwordSuccess}
+                  </p>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPasswordModal(false);
+                    setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+                    setPasswordError('');
+                    setPasswordSuccess('');
+                  }}
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    background: colors.backgroundSecondary,
+                    color: colors.text,
+                    border: `1px solid ${colors.borderLight}`,
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.9375rem',
+                    fontWeight: '500'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    padding: '0.75rem 1.5rem',
+                    background: colors.primary,
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '0.9375rem',
+                    fontWeight: '600'
+                  }}
+                  onMouseEnter={(e) => e.target.style.background = colors.primaryHover}
+                  onMouseLeave={(e) => e.target.style.background = colors.primary}
+                >
+                  Change Password
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

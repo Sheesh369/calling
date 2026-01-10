@@ -3,6 +3,7 @@ import { AuthProvider } from './context/AuthContext';
 import Login from './components/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import App from './App';
+import UserManagement from './components/UserManagement';
 
 export default function AppRouter() {
   return (
@@ -15,6 +16,14 @@ export default function AppRouter() {
             element={
               <ProtectedRoute>
                 <App />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/users" 
+            element={
+              <ProtectedRoute requireAdmin={true}>
+                <UserManagement />
               </ProtectedRoute>
             } 
           />

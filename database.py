@@ -166,6 +166,17 @@ class Database:
         conn.close()
         logger.info(f"User {user_id} deactivated")
     
+    def change_password(self, user_id, new_password):
+        """Change user password"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        password_hash = pwd_context.hash(new_password)
+        cursor.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user_id))
+        conn.commit()
+        conn.close()
+        logger.info(f"Password changed for user {user_id}")
+    
     def verify_password(self, plain_password, password_hash):
         """Verify password"""
         return pwd_context.verify(plain_password, password_hash)

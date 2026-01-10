@@ -277,8 +277,13 @@ async def generate_call_summary(transcript_file: str):
         conversation_lines = []
         for line in conversation_section.split('\n'):
             # Only include lines that are actual conversation
-            if line.strip().startswith('USER:') or line.strip().startswith('ASSISTANT:'):
-                conversation_lines.append(line)
+            # Format: [timestamp] USER: text or [timestamp] ASSISTANT: text
+            if 'USER:' in line or 'ASSISTANT:' in line:
+                # Remove timestamp and keep only the speaker and message
+                if '] USER:' in line:
+                    conversation_lines.append('USER:' + line.split('] USER:')[1])
+                elif '] ASSISTANT:' in line:
+                    conversation_lines.append('ASSISTANT:' + line.split('] ASSISTANT:')[1])
         
         conversation_content = '\n'.join(conversation_lines)
         

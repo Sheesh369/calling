@@ -109,6 +109,10 @@ class UpdateUserRequest(BaseModel):
     email: str = None
     is_active: bool = None
 
+class ChangePasswordRequest(BaseModel):
+    old_password: str = None  # Required for users changing their own password
+    new_password: str
+
 
 @app.post("/api/auth/login")
 async def login(request: LoginRequest):
@@ -216,6 +220,51 @@ async def delete_user(user_id: int, current_user = Depends(require_super_admin))
         
         db.delete_user(user_id)
         return {"message": "User deactivated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/auth/change-password")
+async def change_own_password(request: ChangePasswordRequest, current_user = Depends(get_current_user)):
+    """Change own password (any authenticated user)"""
+    try:
+        user = db.get_user_by_id(current_user["user_id"])
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Verify old password
+        if not request.old_password:
+            raise HTTPException(status_code=400, detail="Old password is required")
+        
+        if not db.verify_password(request.old_password, user["password_hash"]):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+        
+        # Change password
+        db.change_password(current_user["user_id"], request.new_password)
+        
+        logger.info(f"User {user['username']} changed their password")
+        return {"message": "Password changed successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/users/{user_id}/reset-password")
+async def reset_user_password(user_id: int, request: ChangePasswordRequest, current_user = Depends(require_super_admin)):
+    """Reset user password (super admin only)"""
+    try:
+        user = db.get_user_by_id(user_id)
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        # Super admin doesn't need to provide old password
+        db.change_password(user_id, request.new_password)
+        
+        logger.info(f"Super admin {current_user['username']} reset password for user {user['username']}")
+        return {"message": f"Password reset successfully for user {user['username']}"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
