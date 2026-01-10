@@ -43,9 +43,9 @@ RUN uv pip install --system --no-cache \
     fastapi \
     uvicorn \
     httpx \
-    bcrypt \
+    "bcrypt>=4.0.0,<5.0.0" \
     pyjwt \
-    passlib
+    "passlib[bcrypt]>=1.7.4"
 
 # Copy all Python application files
 COPY bot.py ./
