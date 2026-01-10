@@ -42,7 +42,9 @@ RUN uv pip install --system --no-cache \
     loguru \
     fastapi \
     uvicorn \
-    httpx
+    httpx \
+    bcrypt \
+    pyjwt
 
 # Copy all Python application files
 COPY bot.py ./
@@ -53,6 +55,8 @@ COPY excel_service.py ./
 COPY greetings.txt ./
 COPY app.py ./
 COPY webhook.py ./
+COPY database.py ./
+COPY auth.py ./
 
 # Create customer_data directory
 RUN mkdir -p customer_data
