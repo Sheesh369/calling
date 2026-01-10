@@ -112,6 +112,15 @@ export default function HummingBirdMultiAgent() {
   // Fixed delays - not exposed to user
   const MESSAGE_DELAY = 3; // 3 seconds
 
+  // Track if component is mounted to prevent state updates after unmount
+  const [isMounted, setIsMounted] = useState(true);
+
+  useEffect(() => {
+    return () => {
+      setIsMounted(false);
+    };
+  }, []);
+
   useEffect(() => {
     checkBackendHealth();
     
@@ -126,7 +135,9 @@ export default function HummingBirdMultiAgent() {
       const response = await fetchWithAuth(`${BACKEND_URL}/api/users`);
       if (response.ok) {
         const data = await response.json();
-        setAllUsers(data.users || []);
+        if (isMounted) {
+          setAllUsers(data.users || []);
+        }
       }
     } catch (err) {
       console.error('Error fetching users:', err);
@@ -140,7 +151,9 @@ export default function HummingBirdMultiAgent() {
         fetchCallStatus();
       }, 3000);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [autoRefresh, agentType, activeVoiceTab]);
 
   // Fetch data when selectedUserId changes (fixes filter race condition)
@@ -175,9 +188,13 @@ export default function HummingBirdMultiAgent() {
         timeout: 5000,
         headers: { 'ngrok-skip-browser-warning': 'true' }
       });
-      setBackendHealthy(response.ok);
+      if (isMounted) {
+        setBackendHealthy(response.ok);
+      }
     } catch {
-      setBackendHealthy(false);
+      if (isMounted) {
+        setBackendHealthy(false);
+      }
     }
   };
 
@@ -253,7 +270,9 @@ export default function HummingBirdMultiAgent() {
       
       const response = await fetchWithAuth(url);
       const data = await response.json();
-      setCallStatus(data.calls || []);
+      if (isMounted) {
+        setCallStatus(data.calls || []);
+      }
     } catch (err) {
       console.error('Error fetching call status:', err);
     }
@@ -294,7 +313,9 @@ export default function HummingBirdMultiAgent() {
         };
       }) || [];
 
-      setTranscripts(enrichedTranscripts);
+      if (isMounted) {
+        setTranscripts(enrichedTranscripts);
+      }
     } catch (err) {
       console.error('Error fetching transcripts:', err);
     }
