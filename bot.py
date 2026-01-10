@@ -252,24 +252,48 @@ async def generate_call_summary(transcript_file: str):
         with open(transcript_file, "r", encoding="utf-8") as f:
             content = f.read()
         
+        # Extract invoice date from metadata (for validation later)
+        invoice_date = None
+        if "Invoice Date:" in content:
+            try:
+                start = content.index("Invoice Date:") + len("Invoice Date:")
+                end = content.index("\n", start)
+                invoice_date = content[start:end].strip()
+                logger.info(f"Extracted invoice date from transcript: {invoice_date}")
+            except:
+                pass
+        
         # Extract conversation part (between CONVERSATION markers)
         conversation_start = content.find("CONVERSATION:")
         if conversation_start == -1:
             logger.warning(f"No conversation found in transcript: {transcript_file}")
             return
         
-        conversation_content = content[conversation_start:]
+        # Extract ONLY the conversation content (USER/ASSISTANT messages)
+        # Skip the metadata section to avoid sending customer PII to OpenAI
+        conversation_section = content[conversation_start:]
+        
+        # Further extract only USER/ASSISTANT lines (no metadata)
+        conversation_lines = []
+        for line in conversation_section.split('\n'):
+            # Only include lines that are actual conversation
+            if line.strip().startswith('USER:') or line.strip().startswith('ASSISTANT:'):
+                conversation_lines.append(line)
+        
+        conversation_content = '\n'.join(conversation_lines)
         
         # Check for actual USER/ASSISTANT conversation messages
-        conversation_lines = [line for line in conversation_content.split('\n') 
-                             if 'USER:' in line or 'ASSISTANT:' in line]
-        
         if len(conversation_lines) == 0:  # No actual conversation
             logger.warning(f"Empty conversation in transcript: {transcript_file}")
             summary_text = "**CALL OUTCOMES:**\n- FAILED\n\nNo conversation recorded - call failed or customer did not answer."
         else:
             # Create enhanced prompt for OpenAI with call outcome classification
             prompt = f"""Analyze this customer service call about payment reminder.
+
+IMPORTANT CONTEXT:
+- This conversation starts AFTER an initial greeting where the agent mentioned the invoice details
+- Any date mentioned by the CUSTOMER is a PAYMENT CUT-OFF DATE (when they will pay), NOT the invoice date
+- The invoice date was mentioned in the greeting (not shown here) and is in the past
 
 {conversation_content}
 
@@ -286,7 +310,7 @@ IMPORTANT: A call can have MULTIPLE outcomes. For example, a customer might requ
 Then provide your normal summary with these 5 points:
 1. Whether the customer was reached and verified
 2. Customer's response to the payment reminder
-3. Any commitments or next steps discussed
+3. Any commitments or next steps discussed (if customer mentioned a date, that's the PAYMENT CUT-OFF DATE)
 4. Overall outcome of the call
 5. Language used in the conversation (if multiple languages, mention the switch)
 
@@ -318,6 +342,95 @@ Keep the summary brief and professional."""
             
             summary_text = response.choices[0].message.content
             logger.info(f"Summary generated successfully for {transcript_file}")
+            
+            # VALIDATION: Check if cut-off date == invoice date
+            if invoice_date and "CUT_OFF_DATE_PROVIDED" in summary_text:
+                logger.info("Validating cut-off date against invoice date...")
+                
+                # Extract cut-off date from summary
+                import re
+                from datetime import datetime as dt
+                
+                # Common date patterns
+                date_patterns = [
+                    r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})',
+                    r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})',
+                    r'(\d{1,2})[/-](\d{1,2})[/-](\d{4})',
+                    r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})'
+                ]
+                
+                # Normalize invoice date
+                invoice_date_normalized = None
+                for pattern in date_patterns:
+                    match = re.search(pattern, invoice_date, re.IGNORECASE)
+                    if match:
+                        try:
+                            if pattern == date_patterns[0]:  # Full month name
+                                invoice_date_normalized = dt.strptime(f"{match.group(1)} {match.group(2)}, {match.group(3)}", "%B %d, %Y").date()
+                            elif pattern == date_patterns[1]:  # Short month name
+                                invoice_date_normalized = dt.strptime(f"{match.group(1)} {match.group(2)}, {match.group(3)}", "%b %d, %Y").date()
+                            elif pattern == date_patterns[2]:  # DD/MM/YYYY or MM/DD/YYYY
+                                invoice_date_normalized = dt.strptime(f"{match.group(1)}/{match.group(2)}/{match.group(3)}", "%m/%d/%Y").date()
+                            elif pattern == date_patterns[3]:  # YYYY-MM-DD
+                                invoice_date_normalized = dt.strptime(f"{match.group(1)}-{match.group(2)}-{match.group(3)}", "%Y-%m-%d").date()
+                            break
+                        except:
+                            continue
+                
+                # Extract cut-off date from summary (look in CUT_OFF_DATE_PROVIDED line)
+                cutoff_date_normalized = None
+                if "CUT_OFF_DATE_PROVIDED:" in summary_text:
+                    cutoff_line_start = summary_text.index("CUT_OFF_DATE_PROVIDED:")
+                    cutoff_line_end = summary_text.index("\n", cutoff_line_start) if "\n" in summary_text[cutoff_line_start:] else len(summary_text)
+                    cutoff_line = summary_text[cutoff_line_start:cutoff_line_end]
+                    
+                    for pattern in date_patterns:
+                        match = re.search(pattern, cutoff_line, re.IGNORECASE)
+                        if match:
+                            try:
+                                if pattern == date_patterns[0]:
+                                    cutoff_date_normalized = dt.strptime(f"{match.group(1)} {match.group(2)}, {match.group(3)}", "%B %d, %Y").date()
+                                elif pattern == date_patterns[1]:
+                                    cutoff_date_normalized = dt.strptime(f"{match.group(1)} {match.group(2)}, {match.group(3)}", "%b %d, %Y").date()
+                                elif pattern == date_patterns[2]:
+                                    cutoff_date_normalized = dt.strptime(f"{match.group(1)}/{match.group(2)}/{match.group(3)}", "%m/%d/%Y").date()
+                                elif pattern == date_patterns[3]:
+                                    cutoff_date_normalized = dt.strptime(f"{match.group(1)}-{match.group(2)}-{match.group(3)}", "%Y-%m-%d").date()
+                                break
+                            except:
+                                continue
+                
+                # Compare dates
+                if invoice_date_normalized and cutoff_date_normalized:
+                    logger.info(f"Invoice date: {invoice_date_normalized}, Cut-off date: {cutoff_date_normalized}")
+                    
+                    if invoice_date_normalized == cutoff_date_normalized:
+                        logger.warning("Cut-off date matches invoice date! Correcting summary...")
+                        
+                        # Remove CUT_OFF_DATE_PROVIDED outcome
+                        summary_lines = summary_text.split('\n')
+                        corrected_lines = []
+                        skip_next = False
+                        
+                        for line in summary_lines:
+                            if "CUT_OFF_DATE_PROVIDED" in line:
+                                skip_next = True
+                                continue
+                            if skip_next and line.strip().startswith('-'):
+                                skip_next = False
+                                continue
+                            corrected_lines.append(line)
+                        
+                        # Add NO_COMMITMENT if not already present
+                        if "NO_COMMITMENT" not in summary_text:
+                            # Find the CALL OUTCOMES section and add NO_COMMITMENT
+                            for i, line in enumerate(corrected_lines):
+                                if "**CALL OUTCOMES:**" in line:
+                                    corrected_lines.insert(i + 1, "- NO_COMMITMENT: Customer mentioned invoice date instead of commitment date")
+                                    break
+                        
+                        summary_text = '\n'.join(corrected_lines)
+                        logger.info("Summary corrected: CUT_OFF_DATE_PROVIDED removed, NO_COMMITMENT added")
         
         # Append summary to transcript file
         with open(transcript_file, "a", encoding="utf-8") as f:
@@ -346,16 +459,24 @@ Keep the summary brief and professional."""
 async def run_bot(transport: BaseTransport, handle_sigint: bool, custom_data: dict = None, call_uuid: str = None, call_data: dict = None):
     global current_transcript_file
     
-    # Create transcripts directory if it doesn't exist
-    transcripts_dir = Path("transcripts")
-    transcripts_dir.mkdir(exist_ok=True)
+    # Get user_id from custom_data (for organizing transcripts by user)
+    user_id = custom_data.get("user_id", "unknown") if custom_data else "unknown"
+    
+    # Create user-specific transcripts directory
+    transcripts_dir = Path(f"transcripts/user_{user_id}")
+    transcripts_dir.mkdir(parents=True, exist_ok=True)
     
     # Get invoice number from custom data (fallback to "unknown" if not provided)
     invoice_number = custom_data.get("invoice_number", "unknown") if custom_data else "unknown"
+    
+    # Sanitize invoice number - replace invalid filename characters
+    # Replace / \ : * ? " < > | with underscore to prevent directory creation
+    safe_invoice_number = invoice_number.replace("/", "_").replace("\\", "_").replace(":", "_").replace("*", "_").replace("?", "_").replace('"', "_").replace("<", "_").replace(">", "_").replace("|", "_")
+    
     call_id = call_uuid or "unknown"
     
     # Create transcript filename: invoiceid_call_uuid.txt
-    transcript_filename = transcripts_dir / f"{invoice_number}_{call_id}.txt"
+    transcript_filename = transcripts_dir / f"{safe_invoice_number}_{call_id}.txt"
     current_transcript_file = str(transcript_filename)
     
     logger.info(f"Transcript will be saved to: {current_transcript_file}")
@@ -413,7 +534,7 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool, custom_data: di
 
     # Add custom data to system prompt if available
     if custom_data:
-        logger.info(f"Custom data received: {json.dumps(custom_data, indent=2)}")
+        logger.info(f"Custom data received for call (customer info redacted for security)")
         system_content += "CUSTOM CALL DATA:\n"
         system_content += json.dumps(custom_data, indent=2)
         system_content += "\n\nUse this custom data to personalize the conversation. Reference the customer name, invoice details, and amounts naturally during the call.\n\n"
@@ -585,7 +706,7 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool, custom_data: di
         logger.info("Starting multilingual call conversation")
         logger.info("Supported languages: Tamil, English, Hindi, Telugu, Malayalam, Kannada")
         if custom_data:
-            logger.info(f"Call initiated with custom data: {json.dumps(custom_data, indent=2)}")
+            logger.info(f"Call initiated with custom data (customer info redacted for security)")
         if call_uuid:
             logger.info(f"Call UUID: {call_uuid}")
         
@@ -652,9 +773,9 @@ async def bot(runner_args):
     call_uuid = getattr(runner_args.websocket.state, 'call_uuid', None)
     
     # Log what we received
-    print(f"Bot received custom_data: {custom_data}")
+    print(f"Bot received custom_data (customer info redacted for security)")
     print(f"Bot received call_uuid: {call_uuid}")
-    logger.info(f"Bot received custom_data: {custom_data}")
+    logger.info(f"Bot received custom_data (customer info redacted for security)")
     logger.info(f"Bot received call_uuid: {call_uuid}")
     
     transport_type, call_data = await parse_telephony_websocket(runner_args.websocket)

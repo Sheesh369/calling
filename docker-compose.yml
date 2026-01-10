@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: ngrok-tunnel
+    command:
+      - "http"
+      - "--url=arched-lochlan-feverously.ngrok-free.dev"
+      - "hummingbird:7860"
+    environment:
+      - NGROK_AUTHTOKEN=33mYkfgSWvGRfauuCpGvhbepqle_6tTW58SUA9Zeg5CMyTshD
+    ports:
+      - "4040:4040"  # ngrok web interface
+    networks:
+      - hummingbird-network
+    restart: unless-stopped
+
+  hummingbird:
+    build: .
+    container_name: hummingbird-payment-reminder
+    ports:
+      - "7860:7860"  # Backend API
+      - "7861:7861"  # Frontend
+    env_file:
+      - .env
+    volumes:
+      - ./transcripts:/app/transcripts
+      - ./greetings:/app/greetings
+      - ./customer_data:/app/customer_data
+    restart: unless-stopped
+    environment:
+      - ENV=production
+    networks:
+      - hummingbird-network
+    depends_on:
+      - ngrok
+
+networks:
+  hummingbird-network:
+    driver: bridge
