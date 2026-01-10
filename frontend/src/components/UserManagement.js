@@ -20,15 +20,18 @@ const UserManagement = () => {
   const [newPassword, setNewPassword] = useState('');
 
   const colors = {
-    primary: '#4CAF50',
-    secondary: '#45a049',
-    background: '#f5f5f5',
+    primary: 'rgb(150, 133, 117)',
+    primaryHover: 'rgb(100, 89, 78)',
+    background: 'rgb(255, 255, 255)',
+    backgroundSecondary: 'rgb(244, 235, 226)',
+    text: 'rgb(0, 0, 0)',
+    textSecondary: 'rgb(51, 51, 51)',
+    border: 'rgb(200, 178, 156)',
+    borderLight: 'rgb(244, 235, 226)',
     card: '#ffffff',
-    text: '#333333',
-    textLight: '#666666',
-    border: '#e0e0e0',
-    danger: '#f44336',
-    warning: '#ff9800'
+    danger: '#dc3545',
+    warning: '#ffc107',
+    info: '#0dcaf0'
   };
 
   useEffect(() => {
@@ -133,7 +136,15 @@ const UserManagement = () => {
         setNewPassword('');
       } else {
         const data = await response.json();
-        setError(data.detail || 'Failed to reset password');
+        // Handle both string errors and validation error arrays
+        if (typeof data.detail === 'string') {
+          setError(data.detail);
+        } else if (Array.isArray(data.detail)) {
+          // Pydantic validation errors
+          setError(data.detail.map(err => err.msg).join(', '));
+        } else {
+          setError('Failed to reset password');
+        }
       }
     } catch (err) {
       setError('Network error. Please try again.');
@@ -141,7 +152,7 @@ const UserManagement = () => {
   };
 
   return (
-    <div style={{ padding: '2rem', backgroundColor: colors.background, minHeight: '100vh' }}>
+    <div style={{ padding: '2rem', backgroundColor: colors.backgroundSecondary, minHeight: '100vh' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         {/* Back Button */}
         <button
@@ -149,10 +160,10 @@ const UserManagement = () => {
           className="back-button"
           style={{
             padding: '0.5rem 1rem',
-            backgroundColor: 'transparent',
+            backgroundColor: colors.background,
             color: colors.text,
             border: `1px solid ${colors.border}`,
-            borderRadius: '4px',
+            borderRadius: '6px',
             cursor: 'pointer',
             fontSize: '0.875rem',
             fontWeight: '500',
@@ -183,7 +194,7 @@ const UserManagement = () => {
               backgroundColor: colors.primary,
               color: 'white',
               border: 'none',
-              borderRadius: '4px',
+              borderRadius: '6px',
               cursor: 'pointer',
               fontSize: '1rem',
               fontWeight: '500',
@@ -223,12 +234,13 @@ const UserManagement = () => {
         <div style={{
           backgroundColor: colors.card,
           borderRadius: '8px',
-          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-          overflow: 'hidden'
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+          overflow: 'hidden',
+          border: `1px solid ${colors.borderLight}`
         }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ backgroundColor: colors.background }}>
+              <tr style={{ backgroundColor: colors.backgroundSecondary }}>
                 <th style={{ padding: '1rem', textAlign: 'left', color: colors.text, fontWeight: '600' }}>Username</th>
                 <th style={{ padding: '1rem', textAlign: 'left', color: colors.text, fontWeight: '600' }}>Email</th>
                 <th style={{ padding: '1rem', textAlign: 'left', color: colors.text, fontWeight: '600' }}>Role</th>
@@ -240,7 +252,7 @@ const UserManagement = () => {
               {users.map((user) => (
                 <tr key={user.id} style={{ borderTop: `1px solid ${colors.border}` }}>
                   <td style={{ padding: '1rem', color: colors.text }}>{user.username}</td>
-                  <td style={{ padding: '1rem', color: colors.textLight }}>{user.email}</td>
+                  <td style={{ padding: '1rem', color: colors.textSecondary }}>{user.email}</td>
                   <td style={{ padding: '1rem' }}>
                     <span style={{
                       padding: '0.25rem 0.75rem',
@@ -267,14 +279,16 @@ const UserManagement = () => {
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button
                         onClick={() => handleToggleActive(user.id, user.is_active)}
+                        className="toggle-active-button"
                         style={{
                           padding: '0.5rem 1rem',
                           backgroundColor: user.is_active ? colors.warning : colors.primary,
                           color: 'white',
                           border: 'none',
-                          borderRadius: '4px',
+                          borderRadius: '6px',
                           cursor: 'pointer',
-                          fontSize: '0.875rem'
+                          fontSize: '0.875rem',
+                          transition: 'all 0.2s'
                         }}
                       >
                         {user.is_active ? 'Deactivate' : 'Activate'}
@@ -284,14 +298,16 @@ const UserManagement = () => {
                           setResetPasswordUser(user);
                           setShowResetPasswordModal(true);
                         }}
+                        className="reset-password-button"
                         style={{
                           padding: '0.5rem 1rem',
-                          backgroundColor: '#2196F3',
+                          backgroundColor: colors.info,
                           color: 'white',
                           border: 'none',
-                          borderRadius: '4px',
+                          borderRadius: '6px',
                           cursor: 'pointer',
-                          fontSize: '0.875rem'
+                          fontSize: '0.875rem',
+                          transition: 'all 0.2s'
                         }}
                       >
                         Reset Password
@@ -299,14 +315,16 @@ const UserManagement = () => {
                       {user.role !== 'super_admin' && (
                         <button
                           onClick={() => handleDeleteUser(user.id)}
+                          className="delete-button"
                           style={{
                             padding: '0.5rem 1rem',
                             backgroundColor: colors.danger,
                             color: 'white',
                             border: 'none',
-                            borderRadius: '4px',
+                            borderRadius: '6px',
                             cursor: 'pointer',
-                            fontSize: '0.875rem'
+                            fontSize: '0.875rem',
+                            transition: 'all 0.2s'
                           }}
                         >
                           Delete
@@ -434,29 +452,33 @@ const UserManagement = () => {
                       setNewUser({ username: '', email: '', password: '', role: 'user' });
                       setError('');
                     }}
+                    className="cancel-button"
                     style={{
                       padding: '0.75rem 1.5rem',
-                      backgroundColor: colors.border,
+                      backgroundColor: colors.backgroundSecondary,
                       color: colors.text,
-                      border: 'none',
-                      borderRadius: '4px',
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: '6px',
                       cursor: 'pointer',
-                      fontSize: '1rem'
+                      fontSize: '1rem',
+                      transition: 'all 0.2s'
                     }}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
+                    className="submit-button"
                     style={{
                       padding: '0.75rem 1.5rem',
                       backgroundColor: colors.primary,
                       color: 'white',
                       border: 'none',
-                      borderRadius: '4px',
+                      borderRadius: '6px',
                       cursor: 'pointer',
                       fontSize: '1rem',
-                      fontWeight: '500'
+                      fontWeight: '500',
+                      transition: 'all 0.2s'
                     }}
                   >
                     Create User
@@ -522,29 +544,33 @@ const UserManagement = () => {
                       setNewPassword('');
                       setError('');
                     }}
+                    className="cancel-button"
                     style={{
                       padding: '0.75rem 1.5rem',
-                      backgroundColor: colors.border,
+                      backgroundColor: colors.backgroundSecondary,
                       color: colors.text,
-                      border: 'none',
-                      borderRadius: '4px',
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: '6px',
                       cursor: 'pointer',
-                      fontSize: '1rem'
+                      fontSize: '1rem',
+                      transition: 'all 0.2s'
                     }}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
+                    className="submit-button"
                     style={{
                       padding: '0.75rem 1.5rem',
                       backgroundColor: colors.primary,
                       color: 'white',
                       border: 'none',
-                      borderRadius: '4px',
+                      borderRadius: '6px',
                       cursor: 'pointer',
                       fontSize: '1rem',
-                      fontWeight: '500'
+                      fontWeight: '500',
+                      transition: 'all 0.2s'
                     }}
                   >
                     Reset Password
@@ -558,12 +584,32 @@ const UserManagement = () => {
       
       <style>{`
         .back-button:hover {
-          background-color: ${colors.background} !important;
+          background-color: ${colors.backgroundSecondary} !important;
           border-color: ${colors.primary} !important;
         }
         
         .create-user-button:hover {
-          background-color: ${colors.secondary} !important;
+          background-color: ${colors.primaryHover} !important;
+        }
+        
+        .toggle-active-button:hover {
+          opacity: 0.9;
+        }
+        
+        .reset-password-button:hover {
+          opacity: 0.9;
+        }
+        
+        .delete-button:hover {
+          opacity: 0.9;
+        }
+        
+        .cancel-button:hover {
+          background-color: ${colors.borderLight} !important;
+        }
+        
+        .submit-button:hover {
+          background-color: ${colors.primaryHover} !important;
         }
       `}</style>
     </div>

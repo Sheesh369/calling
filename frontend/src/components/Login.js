@@ -162,6 +162,7 @@ export default function Login() {
           <button
             type="submit"
             disabled={loading}
+            className="login-submit-button"
             style={{
               width: '100%',
               padding: '0.875rem',
@@ -178,11 +179,14 @@ export default function Login() {
               justifyContent: 'center',
               gap: '0.5rem'
             }}
-            onMouseEnter={(e) => !loading && (e.target.style.background = colors.primaryHover)}
-            onMouseLeave={(e) => !loading && (e.target.style.background = colors.primary)}
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
+          <style>{`
+            .login-submit-button:not(:disabled):hover {
+              background: ${colors.primaryHover} !important;
+            }
+          `}</style>
         </form>
 
         <div style={{ 

@@ -482,6 +482,9 @@ async def process_single_call(call_data: dict) -> dict:
             call_data_store[call_uuid]["plivo_call_uuid"] = plivo_call_uuid
             call_data_store[call_uuid]["status"] = "calling"
             
+            # Persist to database
+            db.update_call_status(call_uuid, "calling", plivo_call_uuid=plivo_call_uuid)
+            
             logger.info(f"Call initiated successfully: {call_uuid} (Plivo: {plivo_call_uuid})")
             
             return {
@@ -494,6 +497,10 @@ async def process_single_call(call_data: dict) -> dict:
         else:
             logger.error(f"Plivo API error: {response.status_code} - {response.text}")
             call_data_store[call_uuid]["status"] = "failed"
+            
+            # Persist to database
+            db.update_call_status(call_uuid, "failed")
+            
             return {
                 "success": False,
                 "call_uuid": call_uuid,
@@ -504,6 +511,9 @@ async def process_single_call(call_data: dict) -> dict:
         logger.error(f"Error processing call {call_uuid}: {e}")
         if call_uuid in call_data_store:
             call_data_store[call_uuid]["status"] = "failed"
+            
+            # Persist to database
+            db.update_call_status(call_uuid, "failed")
         return {
             "success": False,
             "call_uuid": call_uuid,
@@ -655,14 +665,27 @@ async def start_call(request: Request, current_user = Depends(get_current_user))
         
         # Store call data with India timezone and user_id
         india_tz = pytz.timezone('Asia/Kolkata')
+        created_at = datetime.now(india_tz).isoformat()
+        
         call_data_store[call_uuid] = {
             "phone_number": phone_number,
             "custom_data": custom_data,
             "status": "initiated",
-            "created_at": datetime.now(india_tz).isoformat(),
+            "created_at": created_at,
             "plivo_call_uuid": None,
             "user_id": current_user["user_id"]  # Add user_id for data isolation
         }
+        
+        # Persist to database
+        db.create_call(
+            call_uuid=call_uuid,
+            phone_number=phone_number,
+            customer_name=custom_data.get("customer_name", ""),
+            invoice_number=custom_data.get("invoice_number", ""),
+            user_id=current_user["user_id"],
+            custom_data=custom_data,
+            created_at=created_at
+        )
         
         logger.info(f"Initiating call {call_uuid} to {phone_number}")
         logger.info(f"Custom data received (customer info redacted for security)")
@@ -732,6 +755,9 @@ async def start_call(request: Request, current_user = Depends(get_current_user))
             call_data_store[call_uuid]["plivo_call_uuid"] = plivo_call_uuid
             call_data_store[call_uuid]["status"] = "calling"
             
+            # Persist to database
+            db.update_call_status(call_uuid, "calling", plivo_call_uuid=plivo_call_uuid)
+            
             logger.info(f"Call initiated successfully: {call_uuid} (Plivo: {plivo_call_uuid})")
             
             return JSONResponse({
@@ -744,6 +770,10 @@ async def start_call(request: Request, current_user = Depends(get_current_user))
         else:
             logger.error(f"Plivo API error: {response.status_code} - {response.text}")
             call_data_store[call_uuid]["status"] = "failed"
+            
+            # Persist to database
+            db.update_call_status(call_uuid, "failed")
+            
             raise HTTPException(
                 status_code=response.status_code,
                 detail=f"Failed to initiate call: {response.text}"
@@ -800,14 +830,30 @@ async def start_batch_calls(request: Request, current_user = Depends(get_current
                 
                 # Store call data with India timezone and user_id
                 india_tz = pytz.timezone('Asia/Kolkata')
+                created_at = datetime.now(india_tz).isoformat()
+                
                 call_data_store[call_uuid] = {
                     "phone_number": phone_number,
                     "custom_data": custom_data,
                     "status": "queued",
-                    "created_at": datetime.now(india_tz).isoformat(),
+                    "created_at": created_at,
                     "plivo_call_uuid": None,
                     "user_id": current_user["user_id"]  # Add user_id for data isolation
                 }
+                
+                # Persist to database
+                db.create_call(
+                    call_uuid=call_uuid,
+                    phone_number=phone_number,
+                    customer_name=custom_data.get("customer_name", ""),
+                    invoice_number=custom_data.get("invoice_number", ""),
+                    user_id=current_user["user_id"],
+                    custom_data=custom_data,
+                    created_at=created_at
+                )
+                
+                # Update status to queued in database
+                db.update_call_status(call_uuid, "queued")
                 
                 # Add to queue
                 call_queue.append({
@@ -862,6 +908,10 @@ async def plivo_answer(call_uuid: str, request: Request):
             # Track greeting start time and set status to greeting_playing
             call_data_store[call_uuid]["greeting_start_time"] = datetime.now().isoformat()
             call_data_store[call_uuid]["status"] = "greeting_playing"
+            
+            # Persist to database
+            db.update_call_status(call_uuid, "greeting_playing")
+            
             logger.info(f"Updated call {call_uuid} status to greeting_playing")
         else:
             # Call already progressed past greeting stage - don't change status
@@ -930,17 +980,23 @@ async def plivo_hangup(call_uuid: str, request: Request):
         hangup_cause = form_data.get("HangupCause", "")
         hangup_source = form_data.get("HangupSource", "Unknown")
         call_status = form_data.get("CallStatus", "")
+        ended_at = datetime.now().isoformat()
         
         # Update call data
         call_data_store[call_uuid]["hangup_cause"] = hangup_cause
         call_data_store[call_uuid]["hangup_source"] = hangup_source
-        call_data_store[call_uuid]["ended_at"] = datetime.now().isoformat()
+        call_data_store[call_uuid]["ended_at"] = ended_at
         
         # Only update status if not already completed (avoid overwriting WebSocket status)
         current_status = call_data_store[call_uuid].get("status")
         if current_status not in ["completed", "in_progress"]:
             # Set status to completed so queue can move on
             call_data_store[call_uuid]["status"] = "completed"
+            
+            # Persist to database
+            db.update_call_status(call_uuid, "completed", ended_at=ended_at, 
+                                hangup_cause=hangup_cause, hangup_source=hangup_source)
+            
             logger.info(f"Call {call_uuid} marked as completed via hangup webhook")
         else:
             logger.info(f"Call {call_uuid} already in status '{current_status}', not overwriting")
@@ -971,6 +1027,9 @@ async def websocket_endpoint(websocket: WebSocket, call_uuid: str):
         websocket.state.custom_data["user_id"] = call_data_store[call_uuid].get("user_id")
         websocket.state.call_uuid = call_uuid
         call_data_store[call_uuid]["status"] = "in_progress"
+        
+        # Persist to database
+        db.update_call_status(call_uuid, "in_progress")
     else:
         logger.warning(f"Call UUID {call_uuid} not found in store")
         websocket.state.custom_data = {}
@@ -994,8 +1053,12 @@ async def websocket_endpoint(websocket: WebSocket, call_uuid: str):
     finally:
         logger.info(f"WebSocket closed for call {call_uuid}")
         if call_uuid in call_data_store:
+            ended_at = datetime.now().isoformat()
             call_data_store[call_uuid]["status"] = "completed"
-            call_data_store[call_uuid]["ended_at"] = datetime.now().isoformat()
+            call_data_store[call_uuid]["ended_at"] = ended_at
+            
+            # Persist to database
+            db.update_call_status(call_uuid, "completed", ended_at=ended_at)
         
         # Clean up dynamic greeting file
         dynamic_greeting_path = GREETINGS_DIR / f"{call_uuid}.wav"
@@ -1010,7 +1073,7 @@ async def websocket_endpoint(websocket: WebSocket, call_uuid: str):
 @app.get("/calls")
 async def list_calls(user_id: int = None, current_user = Depends(get_current_user)):
     """
-    List calls with their current status
+    List calls with their current status from database (persistent call history)
     - Regular users: see only their own calls
     - Super admin: can see all calls or filter by user_id parameter
     """
@@ -1029,33 +1092,41 @@ async def list_calls(user_id: int = None, current_user = Depends(get_current_use
         # Regular user can only see their own calls
         filter_user_id = current_user["user_id"]
     
-    # Filter calls
-    if filter_user_id is None:
-        # Super admin viewing all users
-        filtered_calls = call_data_store
-    else:
-        # Filter by specific user_id
-        filtered_calls = {
-            uuid: data 
-            for uuid, data in call_data_store.items() 
-            if data.get("user_id") == filter_user_id
-        }
+    # Get calls from database
+    db_calls = db.get_calls(user_id=filter_user_id)
     
-    return {
-        "calls": [
-            {
+    # Merge with in-memory data for active calls (to get real-time status)
+    calls_list = []
+    for db_call in db_calls:
+        call_uuid = db_call["call_uuid"]
+        
+        # If call is in memory, use memory status (more up-to-date for active calls)
+        if call_uuid in call_data_store:
+            memory_data = call_data_store[call_uuid]
+            calls_list.append({
                 "call_uuid": call_uuid,
-                "phone_number": data["phone_number"],
-                "status": data["status"],
-                "created_at": data["created_at"],
-                "ended_at": data.get("ended_at"),
-                "customer_name": data.get("custom_data", {}).get("customer_name", "Unknown"),
-                "invoice_number": data.get("custom_data", {}).get("invoice_number", "N/A"),
-                "user_id": data.get("user_id")
-            }
-            for call_uuid, data in filtered_calls.items()
-        ]
-    }
+                "phone_number": db_call["phone_number"],
+                "status": memory_data.get("status", db_call["status"]),
+                "created_at": db_call["created_at"],
+                "ended_at": memory_data.get("ended_at", db_call["ended_at"]),
+                "customer_name": db_call["customer_name"] or "Unknown",
+                "invoice_number": db_call["invoice_number"] or "N/A",
+                "user_id": db_call["user_id"]
+            })
+        else:
+            # Use database data for completed calls
+            calls_list.append({
+                "call_uuid": call_uuid,
+                "phone_number": db_call["phone_number"],
+                "status": db_call["status"],
+                "created_at": db_call["created_at"],
+                "ended_at": db_call["ended_at"],
+                "customer_name": db_call["customer_name"] or "Unknown",
+                "invoice_number": db_call["invoice_number"] or "N/A",
+                "user_id": db_call["user_id"]
+            })
+    
+    return {"calls": calls_list}
 
 
 @app.get("/transcripts")

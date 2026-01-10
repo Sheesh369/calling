@@ -127,6 +127,15 @@ export default function HummingBirdMultiAgent() {
     }
   }, [activeVoiceTab]);
 
+  // Refresh data when selectedUserId changes
+  useEffect(() => {
+    if (activeVoiceTab === 'status') {
+      fetchCallStatus();
+    } else if (activeVoiceTab === 'transcripts') {
+      fetchTranscripts();
+    }
+  }, [selectedUserId]);
+
   const checkBackendHealth = async () => {
     try {
       const response = await fetch(`${BACKEND_URL}/health`, { 
@@ -468,7 +477,15 @@ export default function HummingBirdMultiAgent() {
         }, 2000);
       } else {
         const data = await response.json();
-        setPasswordError(data.detail || 'Failed to change password');
+        // Handle both string errors and validation error arrays
+        if (typeof data.detail === 'string') {
+          setPasswordError(data.detail);
+        } else if (Array.isArray(data.detail)) {
+          // Pydantic validation errors
+          setPasswordError(data.detail.map(err => err.msg).join(', '));
+        } else {
+          setPasswordError('Failed to change password');
+        }
       }
     } catch (err) {
       setPasswordError('Network error. Please try again.');
@@ -1052,24 +1069,24 @@ export default function HummingBirdMultiAgent() {
           {filteredTranscripts.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               {filteredTranscripts.map((transcript, idx) => (
-                <div key={idx} style={{
-                  padding: '1.5rem',
-                  background: '#FAFAFA',
-                  borderRadius: '6px',
-                  border: `1px solid ${colors.borderLight}`,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
-                    e.currentTarget.style.borderColor = colors.primary;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = 'none';
-                    e.currentTarget.style.borderColor = colors.borderLight;
+                <div key={idx} 
+                  className="transcript-card"
+                  style={{
+                    padding: '1.5rem',
+                    background: '#FAFAFA',
+                    borderRadius: '6px',
+                    border: `1px solid ${colors.borderLight}`,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
                   }}
                   onClick={() => handleTranscriptClick(transcript)}
                 >
+                  <style>{`
+                    .transcript-card:hover {
+                      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                      border-color: ${colors.primary} !important;
+                    }
+                  `}</style>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
                     <div style={{ flex: 1 }}>
                       <h4 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: '0.5rem', color: colors.text }}>
@@ -1200,6 +1217,7 @@ export default function HummingBirdMultiAgent() {
                 </div>
                 <button
                   onClick={() => setExpandedTranscript(null)}
+                  className="modal-close-button"
                   style={{
                     background: 'transparent',
                     border: 'none',
@@ -1210,11 +1228,14 @@ export default function HummingBirdMultiAgent() {
                     alignItems: 'center',
                     justifyContent: 'center'
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = colors.backgroundSecondary}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                 >
                   <X size={24} color={colors.text} />
                 </button>
+                <style>{`
+                  .modal-close-button:hover {
+                    background: ${colors.backgroundSecondary} !important;
+                  }
+                `}</style>
               </div>
 
               {/* Modal Body */}
@@ -1658,12 +1679,7 @@ export default function HummingBirdMultiAgent() {
                     } else {
                       setSelectedUserId(parseInt(value));
                     }
-                    // Refresh data when user selection changes
-                    if (activeVoiceTab === 'status') {
-                      fetchCallStatus();
-                    } else if (activeVoiceTab === 'transcripts') {
-                      fetchTranscripts();
-                    }
+                    // Data will refresh automatically via useEffect
                   }}
                   style={{
                     padding: '0.5rem 0.75rem',
@@ -1690,37 +1706,40 @@ export default function HummingBirdMultiAgent() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
               {/* User Management Button - Only for Super Admin */}
               {user?.role === 'super_admin' && (
-                <button
-                  onClick={() => navigate('/users')}
-                  style={{
-                    padding: '0.5rem 1rem',
-                    background: colors.primary,
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '0.875rem',
-                    fontWeight: '500',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.background = colors.primaryHover;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.background = colors.primary;
-                  }}
-                >
-                  <Users size={16} />
-                  Manage Users
-                </button>
+                <>
+                  <button
+                    onClick={() => navigate('/users')}
+                    className="manage-users-button"
+                    style={{
+                      padding: '0.5rem 1rem',
+                      background: colors.primary,
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '0.875rem',
+                      fontWeight: '500',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <Users size={16} />
+                    Manage Users
+                  </button>
+                  <style>{`
+                    .manage-users-button:hover {
+                      background: ${colors.primaryHover} !important;
+                    }
+                  `}</style>
+                </>
               )}
               
               {/* Change Password Button - For All Users */}
               <button
                 onClick={() => setShowPasswordModal(true)}
+                className="change-password-button"
                 style={{
                   padding: '0.5rem 1rem',
                   background: colors.backgroundSecondary,
@@ -1732,15 +1751,14 @@ export default function HummingBirdMultiAgent() {
                   fontWeight: '500',
                   transition: 'all 0.2s'
                 }}
-                onMouseEnter={(e) => {
-                  e.target.style.background = colors.borderLight;
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.background = colors.backgroundSecondary;
-                }}
               >
                 Change Password
               </button>
+              <style>{`
+                .change-password-button:hover {
+                  background: ${colors.borderLight} !important;
+                }
+              `}</style>
               
               <div style={{ textAlign: 'right' }}>
                 <p style={{ fontSize: '0.875rem', fontWeight: '600', color: colors.text, margin: 0 }}>
@@ -1755,6 +1773,7 @@ export default function HummingBirdMultiAgent() {
                   logout();
                   navigate('/login');
                 }}
+                className="logout-button"
                 style={{
                   padding: '0.5rem 1rem',
                   background: colors.backgroundSecondary,
@@ -1769,18 +1788,16 @@ export default function HummingBirdMultiAgent() {
                   gap: '0.5rem',
                   transition: 'all 0.2s'
                 }}
-                onMouseEnter={(e) => {
-                  e.target.style.background = colors.primary;
-                  e.target.style.color = 'white';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.background = colors.backgroundSecondary;
-                  e.target.style.color = colors.text;
-                }}
               >
                 <LogOut size={16} />
                 Logout
               </button>
+              <style>{`
+                .logout-button:hover {
+                  background: ${colors.primary} !important;
+                  color: white !important;
+                }
+              `}</style>
             </div>
 
             {/* Backend Status */}
@@ -2069,6 +2086,7 @@ export default function HummingBirdMultiAgent() {
                 </button>
                 <button
                   type="submit"
+                  className="password-submit-button"
                   style={{
                     padding: '0.75rem 1.5rem',
                     background: colors.primary,
@@ -2079,11 +2097,14 @@ export default function HummingBirdMultiAgent() {
                     fontSize: '0.9375rem',
                     fontWeight: '600'
                   }}
-                  onMouseEnter={(e) => e.target.style.background = colors.primaryHover}
-                  onMouseLeave={(e) => e.target.style.background = colors.primary}
                 >
                   Change Password
                 </button>
+                <style>{`
+                  .password-submit-button:hover {
+                    background: ${colors.primaryHover} !important;
+                  }
+                `}</style>
               </div>
             </form>
           </div>
