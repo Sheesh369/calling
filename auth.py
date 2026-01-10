@@ -1,7 +1,7 @@
 import jwt
 from datetime import datetime, timedelta
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthCredentials
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
 
 SECRET_KEY = "hummingbird-secret-key-change-in-production-2026"
@@ -23,7 +23,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def get_current_user(credentials: HTTPAuthCredentials = Depends(security)):
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Get current user from JWT token"""
     token = credentials.credentials
     
@@ -65,7 +65,7 @@ def require_super_admin(current_user: dict = Depends(get_current_user)):
     return current_user
 
 # Optional: Make authentication optional for certain endpoints
-def get_current_user_optional(credentials: Optional[HTTPAuthCredentials] = Depends(HTTPBearer(auto_error=False))):
+def get_current_user_optional(credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))):
     """Get current user from JWT token (optional - returns None if no token)"""
     if credentials is None:
         return None
