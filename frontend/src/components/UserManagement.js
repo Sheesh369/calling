@@ -146,6 +146,7 @@ const UserManagement = () => {
         {/* Back Button */}
         <button
           onClick={() => navigate('/dashboard')}
+          className="back-button"
           style={{
             padding: '0.5rem 1rem',
             backgroundColor: 'transparent',
@@ -158,15 +159,8 @@ const UserManagement = () => {
             display: 'flex',
             alignItems: 'center',
             gap: '0.5rem',
-            marginBottom: '1.5rem'
-          }}
-          onMouseOver={(e) => {
-            e.target.style.backgroundColor = colors.background;
-            e.target.style.borderColor = colors.primary;
-          }}
-          onMouseOut={(e) => {
-            e.target.style.backgroundColor = 'transparent';
-            e.target.style.borderColor = colors.border;
+            marginBottom: '1.5rem',
+            transition: 'all 0.2s'
           }}
         >
           <ArrowLeft size={16} />
@@ -183,6 +177,7 @@ const UserManagement = () => {
           <h1 style={{ color: colors.text, margin: 0 }}>User Management</h1>
           <button
             onClick={() => setShowCreateModal(true)}
+            className="create-user-button"
             style={{
               padding: '0.75rem 1.5rem',
               backgroundColor: colors.primary,
@@ -191,10 +186,9 @@ const UserManagement = () => {
               borderRadius: '4px',
               cursor: 'pointer',
               fontSize: '1rem',
-              fontWeight: '500'
+              fontWeight: '500',
+              transition: 'all 0.2s'
             }}
-            onMouseOver={(e) => e.target.style.backgroundColor = colors.secondary}
-            onMouseOut={(e) => e.target.style.backgroundColor = colors.primary}
           >
             + Create User
           </button>
@@ -561,6 +555,17 @@ const UserManagement = () => {
           </div>
         )}
       </div>
+      
+      <style>{`
+        .back-button:hover {
+          background-color: ${colors.background} !important;
+          border-color: ${colors.primary} !important;
+        }
+        
+        .create-user-button:hover {
+          background-color: ${colors.secondary} !important;
+        }
+      `}</style>
     </div>
   );
 };
