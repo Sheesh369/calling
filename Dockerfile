@@ -70,9 +70,6 @@ WORKDIR /app/frontend
 RUN npm ci --legacy-peer-deps
 RUN npm run build
 
-# Build the React frontend
-RUN npm run build
-
 # Back to app directory
 WORKDIR /app
 

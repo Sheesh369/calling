@@ -1676,13 +1676,6 @@ export default function HummingBirdMultiAgent() {
     <>
       <style>{globalStyles}</style>
       <div style={{ minHeight: '100vh', background: '#FAFAFA', fontFamily: '"Cormorant Garamond", "Playfair Display", serif' }}>
-        <head>
-          <link
-            href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
-            rel="stylesheet"
-          />
-        </head>
-
         {/* Header */}
         <header style={{
           background: colors.background,

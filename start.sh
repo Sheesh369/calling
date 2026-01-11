@@ -9,12 +9,8 @@ ngrok http --url=seagull-winning-personally.ngrok-free.app 7860 &
 # Wait a moment for ngrok to start
 sleep 3
 
-# Start the Python server in the background
+# Start the Python server in the background (it will serve the built React app)
 python server.py &
 
-# Wait a moment for Python server to start
-sleep 2
-
-# Start the npm frontend on port 7861
-cd frontend
-PORT=7861 npm start
+# Keep container running
+tail -f /dev/null

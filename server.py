@@ -1492,6 +1492,39 @@ async def send_email_reminder(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Serve React build files
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+
+# Mount static files from React build
+frontend_build_path = os.path.join(os.path.dirname(__file__), "frontend", "build")
+if os.path.exists(frontend_build_path):
+    app.mount("/static", StaticFiles(directory=os.path.join(frontend_build_path, "static")), name="static")
+    
+    @app.get("/{full_path:path}")
+    async def serve_react_app(full_path: str):
+        """Serve React app for all non-API routes"""
+        # Skip API routes and backend endpoints
+        if (full_path.startswith("api/") or 
+            full_path.startswith("health") or 
+            full_path.startswith("calls") or 
+            full_path.startswith("transcripts") or 
+            full_path.startswith("start") or 
+            full_path.startswith("webhook") or
+            full_path.startswith("audio/") or
+            full_path.startswith("plivo_") or
+            full_path.startswith("whatsapp/") or
+            full_path.startswith("email/")):
+            raise HTTPException(status_code=404)
+        
+        # Serve index.html for all other routes (React Router)
+        index_path = os.path.join(frontend_build_path, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        raise HTTPException(status_code=404)
+
+
 if __name__ == "__main__":
     import uvicorn
     
