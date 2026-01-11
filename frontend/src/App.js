@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Phone,
   MessageCircle,
@@ -156,31 +156,19 @@ export default function HummingBirdMultiAgent() {
     };
   }, [autoRefresh, agentType, activeVoiceTab]);
 
-  // Fetch data when selectedUserId changes (fixes filter race condition)
+  // Consolidated: Fetch data when selectedUserId or activeVoiceTab changes
   useEffect(() => {
-    if (activeVoiceTab === 'status') {
-      fetchCallStatus();
-    } else if (activeVoiceTab === 'transcripts') {
-      fetchTranscripts();
-    }
+    const fetchData = async () => {
+      if (activeVoiceTab === 'status') {
+        await fetchCallStatus();
+      } else if (activeVoiceTab === 'transcripts') {
+        await fetchTranscripts();
+      }
+    };
+    
+    fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedUserId]);
-
-  // Auto-fetch transcripts when switching to transcripts tab
-  useEffect(() => {
-    if (activeVoiceTab === 'transcripts') {
-      fetchTranscripts();
-    }
-  }, [activeVoiceTab]);
-
-  // Refresh data when selectedUserId changes
-  useEffect(() => {
-    if (activeVoiceTab === 'status') {
-      fetchCallStatus();
-    } else if (activeVoiceTab === 'transcripts') {
-      fetchTranscripts();
-    }
-  }, [selectedUserId]);
+  }, [selectedUserId, activeVoiceTab]);
 
   const checkBackendHealth = async () => {
     try {
@@ -260,7 +248,7 @@ export default function HummingBirdMultiAgent() {
     }
   };
 
-  const fetchCallStatus = async () => {
+  const fetchCallStatus = useCallback(async () => {
     try {
       // Build query params for super admin
       let url = `${BACKEND_URL}/calls`;
@@ -276,9 +264,9 @@ export default function HummingBirdMultiAgent() {
     } catch (err) {
       console.error('Error fetching call status:', err);
     }
-  };
+  }, [user?.role, selectedUserId, isMounted]);
 
-  const fetchTranscripts = async () => {
+  const fetchTranscripts = useCallback(async () => {
     try {
       // Build query params for super admin
       let url = `${BACKEND_URL}/transcripts`;
@@ -319,7 +307,7 @@ export default function HummingBirdMultiAgent() {
     } catch (err) {
       console.error('Error fetching transcripts:', err);
     }
-  };
+  }, [user?.role, selectedUserId, isMounted]);
 
   const initiateVoiceCalls = async () => {
     if (!parsedData || parsedData.length === 0) return;
@@ -516,6 +504,9 @@ export default function HummingBirdMultiAgent() {
     try {
       const response = await fetchWithAuth(`${BACKEND_URL}/api/auth/change-password`, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify({
           old_password: passwordForm.oldPassword,
           new_password: passwordForm.newPassword
@@ -545,6 +536,32 @@ export default function HummingBirdMultiAgent() {
       setPasswordError('Network error. Please try again.');
     }
   };
+
+  // Handle logout with proper cleanup
+  const handleLogout = useCallback(() => {
+    setShowPasswordModal(false);
+    setExpandedTranscript(null);
+    
+    setTimeout(() => {
+      logout();
+      navigate('/login');
+    }, 0);
+  }, [logout, navigate]);
+
+  // Handle password modal close with batched updates
+  const closePasswordModal = useCallback(() => {
+    setShowPasswordModal(false);
+    setTimeout(() => {
+      setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+      setPasswordError('');
+      setPasswordSuccess('');
+    }, 0);
+  }, []);
+
+  // Handle transcript modal close
+  const closeTranscriptModal = useCallback(() => {
+    setExpandedTranscript(null);
+  }, []);
 
   const renderAgentSelector = () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -1230,7 +1247,7 @@ export default function HummingBirdMultiAgent() {
             zIndex: 1000,
             padding: '2rem'
           }}
-            onClick={() => setExpandedTranscript(null)}
+            onClick={closeTranscriptModal}
           >
             <div style={{
               background: colors.background,
@@ -1264,7 +1281,7 @@ export default function HummingBirdMultiAgent() {
                   </p>
                 </div>
                 <button
-                  onClick={() => setExpandedTranscript(null)}
+                  onClick={closeTranscriptModal}
                   className="modal-close-button"
                   style={{
                     background: 'transparent',
@@ -1804,10 +1821,7 @@ export default function HummingBirdMultiAgent() {
                 </p>
               </div>
               <button
-                onClick={() => {
-                  logout();
-                  navigate('/login');
-                }}
+                onClick={handleLogout}
                 className="logout-button"
                 style={{
                   padding: '0.5rem 1rem',
@@ -1970,7 +1984,7 @@ export default function HummingBirdMultiAgent() {
           zIndex: 1000,
           padding: '2rem'
         }}
-          onClick={() => setShowPasswordModal(false)}
+          onClick={closePasswordModal}
         >
           <div style={{
             background: colors.background,
@@ -2087,12 +2101,7 @@ export default function HummingBirdMultiAgent() {
               <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowPasswordModal(false);
-                    setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
-                    setPasswordError('');
-                    setPasswordSuccess('');
-                  }}
+                  onClick={closePasswordModal}
                   style={{
                     padding: '0.75rem 1.5rem',
                     background: colors.backgroundSecondary,
