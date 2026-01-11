@@ -65,9 +65,10 @@ RUN mkdir -p customer_data
 # Copy frontend files
 COPY frontend ./frontend
 
-# Install frontend dependencies
+# Build frontend (FIX: Actually build the React app)
 WORKDIR /app/frontend
 RUN npm ci --legacy-peer-deps
+RUN npm run build
 
 # Back to app directory
 WORKDIR /app
