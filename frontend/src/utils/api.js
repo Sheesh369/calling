@@ -1,9 +1,9 @@
-const BACKEND_URL = "http://3.110.2.165:7860";
-
+// API utility for authenticated requests
+// Uses relative URLs - browser automatically uses current origin
 export const fetchWithAuth = async (url, options = {}) => {
   const token = localStorage.getItem('access_token');
   
-  return fetch(`${BACKEND_URL}${url}`, {
+  return fetch(url, {
     ...options,
     headers: {
       ...options.headers,
@@ -13,5 +13,3 @@ export const fetchWithAuth = async (url, options = {}) => {
     }
   });
 };
-
-export { BACKEND_URL };

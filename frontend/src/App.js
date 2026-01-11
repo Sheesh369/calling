@@ -20,8 +20,6 @@ import * as XLSX from 'xlsx';
 import { useAuth } from './context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
-const BACKEND_URL = "http://3.110.2.165:7860";
-
 // Helper function to fetch with authentication
 const fetchWithAuth = async (url, options = {}) => {
   const token = localStorage.getItem('access_token');
@@ -132,7 +130,7 @@ export default function HummingBirdMultiAgent() {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetchWithAuth(`${BACKEND_URL}/api/users`);
+      const response = await fetchWithAuth('/api/users');
       if (response.ok) {
         const data = await response.json();
         if (isMounted) {
@@ -172,7 +170,7 @@ export default function HummingBirdMultiAgent() {
 
   const checkBackendHealth = async () => {
     try {
-      const response = await fetch(`${BACKEND_URL}/health`, { 
+      const response = await fetch('/health', { 
         timeout: 5000,
         headers: { 'ngrok-skip-browser-warning': 'true' }
       });
@@ -251,7 +249,7 @@ export default function HummingBirdMultiAgent() {
   const fetchCallStatus = useCallback(async () => {
     try {
       // Build query params for super admin
-      let url = `${BACKEND_URL}/calls`;
+      let url = '/calls';
       if (user?.role === 'super_admin') {
         // Only add user_id param if a filter is selected (not null)
         if (selectedUserId !== null) {
@@ -273,7 +271,7 @@ export default function HummingBirdMultiAgent() {
   const fetchTranscripts = useCallback(async () => {
     try {
       // Build query params for super admin
-      let url = `${BACKEND_URL}/transcripts`;
+      let url = '/transcripts';
       if (user?.role === 'super_admin') {
         // Only add user_id param if a filter is selected (not null)
         if (selectedUserId !== null) {
@@ -286,7 +284,7 @@ export default function HummingBirdMultiAgent() {
       const data = await response.json();
 
       // Also fetch call status to match phone numbers
-      let callsUrl = `${BACKEND_URL}/calls`;
+      let callsUrl = '/calls';
       if (user?.role === 'super_admin') {
         if (selectedUserId !== null) {
           callsUrl += `?user_id=${selectedUserId}`;
@@ -339,7 +337,7 @@ export default function HummingBirdMultiAgent() {
       }));
 
       // Send batch request to backend with authentication
-      const response = await fetchWithAuth(`${BACKEND_URL}/start_batch`, {
+      const response = await fetchWithAuth('/start_batch', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json'
@@ -360,7 +358,7 @@ export default function HummingBirdMultiAgent() {
             await fetchCallStatus();
             
             // Check if all calls are completed
-            let statusUrl = `${BACKEND_URL}/calls`;
+            let statusUrl = '/calls';
             if (user?.role === 'super_admin') {
               if (selectedUserId !== null) {
                 statusUrl += `?user_id=${selectedUserId}`;
@@ -415,7 +413,7 @@ export default function HummingBirdMultiAgent() {
           }
         };
 
-        const response = await fetch(`${BACKEND_URL}/whatsapp/send`, {
+        const response = await fetch('/whatsapp/send', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -465,7 +463,7 @@ export default function HummingBirdMultiAgent() {
           }
         };
 
-        const response = await fetch(`${BACKEND_URL}/email/send`, {
+        const response = await fetch('/email/send', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -514,7 +512,7 @@ export default function HummingBirdMultiAgent() {
     }
 
     try {
-      const response = await fetchWithAuth(`${BACKEND_URL}/api/auth/change-password`, {
+      const response = await fetchWithAuth('/api/auth/change-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -973,7 +971,7 @@ export default function HummingBirdMultiAgent() {
 
       try {
         // Fetch full transcript content from backend
-        const response = await fetch(`${BACKEND_URL}/transcripts/${transcript.filename}`, {
+        const response = await fetch(`/transcripts/${transcript.filename}`, {
           headers: { 'ngrok-skip-browser-warning': 'true' }
         });
         const data = await response.json();
