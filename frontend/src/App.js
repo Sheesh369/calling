@@ -252,8 +252,12 @@ export default function HummingBirdMultiAgent() {
     try {
       // Build query params for super admin
       let url = `${BACKEND_URL}/calls`;
-      if (user?.role === 'super_admin' && selectedUserId !== null) {
-        url += `?user_id=${selectedUserId}`;
+      if (user?.role === 'super_admin') {
+        // Only add user_id param if a filter is selected (not null)
+        if (selectedUserId !== null) {
+          url += `?user_id=${selectedUserId}`;
+        }
+        // If selectedUserId is null, don't add param (shows super admin's own data)
       }
       
       const response = await fetchWithAuth(url);
@@ -270,8 +274,12 @@ export default function HummingBirdMultiAgent() {
     try {
       // Build query params for super admin
       let url = `${BACKEND_URL}/transcripts`;
-      if (user?.role === 'super_admin' && selectedUserId !== null) {
-        url += `?user_id=${selectedUserId}`;
+      if (user?.role === 'super_admin') {
+        // Only add user_id param if a filter is selected (not null)
+        if (selectedUserId !== null) {
+          url += `?user_id=${selectedUserId}`;
+        }
+        // If selectedUserId is null, don't add param (shows super admin's own data)
       }
       
       const response = await fetchWithAuth(url);
@@ -279,8 +287,10 @@ export default function HummingBirdMultiAgent() {
 
       // Also fetch call status to match phone numbers
       let callsUrl = `${BACKEND_URL}/calls`;
-      if (user?.role === 'super_admin' && selectedUserId !== null) {
-        callsUrl += `?user_id=${selectedUserId}`;
+      if (user?.role === 'super_admin') {
+        if (selectedUserId !== null) {
+          callsUrl += `?user_id=${selectedUserId}`;
+        }
       }
       
       const callsResponse = await fetchWithAuth(callsUrl);
@@ -351,8 +361,10 @@ export default function HummingBirdMultiAgent() {
             
             // Check if all calls are completed
             let statusUrl = `${BACKEND_URL}/calls`;
-            if (user?.role === 'super_admin' && selectedUserId !== null) {
-              statusUrl += `?user_id=${selectedUserId}`;
+            if (user?.role === 'super_admin') {
+              if (selectedUserId !== null) {
+                statusUrl += `?user_id=${selectedUserId}`;
+              }
             }
             
             const statusResponse = await fetchWithAuth(statusUrl);
@@ -1724,7 +1736,11 @@ export default function HummingBirdMultiAgent() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <Users size={18} color={colors.primary} />
                 <select
-                  value={selectedUserId === null ? 'own' : selectedUserId}
+                  value={
+                    selectedUserId === null ? 'own' : 
+                    selectedUserId === 0 ? 'all' : 
+                    selectedUserId.toString()
+                  }
                   onChange={(e) => {
                     const value = e.target.value;
                     if (value === 'own') {
@@ -1751,7 +1767,7 @@ export default function HummingBirdMultiAgent() {
                   <option value="own">My Data Only</option>
                   <option value="all">All Users (Consolidated)</option>
                   {allUsers.filter(u => u.id !== user.id).map(u => (
-                    <option key={u.id} value={u.id}>User: {u.username}</option>
+                    <option key={u.id} value={u.id.toString()}>User: {u.username}</option>
                   ))}
                 </select>
               </div>

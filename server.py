@@ -1079,12 +1079,12 @@ async def list_calls(user_id: int = None, current_user = Depends(get_current_use
     """
     # Determine which user's calls to show
     if current_user["role"] == "super_admin":
-        if user_id is not None:
-            # Super admin viewing specific user's calls
-            filter_user_id = user_id
-        elif user_id == 0:
+        if user_id == 0:
             # user_id=0 means "all users" for super admin
             filter_user_id = None
+        elif user_id is not None:
+            # Super admin viewing specific user's calls
+            filter_user_id = user_id
         else:
             # No user_id specified, show super admin's own calls
             filter_user_id = current_user["user_id"]
