@@ -1312,15 +1312,23 @@ async def get_transcript(filename: str):
     Returns the transcript with conversation and summary
     """
     try:
-        transcripts_dir = Path("transcripts")
-        transcript_file = transcripts_dir / filename
+        transcripts_base_dir = Path("transcripts")
+        
+        # Search for the file in all user subdirectories
+        transcript_file = None
+        for user_folder in transcripts_base_dir.glob("user_*"):
+            if user_folder.is_dir():
+                potential_file = user_folder / filename
+                if potential_file.exists():
+                    transcript_file = potential_file
+                    break
+        
+        if transcript_file is None:
+            raise HTTPException(status_code=404, detail="Transcript not found")
         
         # Security check: ensure file is in transcripts directory
-        if not transcript_file.resolve().is_relative_to(transcripts_dir.resolve()):
+        if not transcript_file.resolve().is_relative_to(transcripts_base_dir.resolve()):
             raise HTTPException(status_code=400, detail="Invalid filename")
-        
-        if not transcript_file.exists():
-            raise HTTPException(status_code=404, detail="Transcript not found")
         
         # Read file content
         with open(transcript_file, "r", encoding="utf-8") as f:

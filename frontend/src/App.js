@@ -919,7 +919,7 @@ export default function HummingBirdMultiAgent() {
                         hour: '2-digit', 
                         minute: '2-digit', 
                         second: '2-digit',
-                        hour12: false 
+                        hour12: true 
                       })}
                     </td>
                   </tr>
@@ -1183,7 +1183,7 @@ export default function HummingBirdMultiAgent() {
                           hour: '2-digit', 
                           minute: '2-digit', 
                           second: '2-digit',
-                          hour12: false 
+                          hour12: true 
                         })}
                       </p>
                     </div>
@@ -1337,7 +1337,7 @@ export default function HummingBirdMultiAgent() {
                           hour: '2-digit', 
                           minute: '2-digit', 
                           second: '2-digit',
-                          hour12: false 
+                          hour12: true 
                         })}
                       </span>
                     </div>
@@ -1537,7 +1537,15 @@ export default function HummingBirdMultiAgent() {
                       </span>
                     </td>
                     <td style={{ padding: '0.75rem', color: colors.textSecondary }}>
-                      {new Date(msg.sent_at).toLocaleString()}
+                      {new Date(msg.sent_at).toLocaleString('en-IN', { 
+                        year: 'numeric', 
+                        month: '2-digit', 
+                        day: '2-digit', 
+                        hour: '2-digit', 
+                        minute: '2-digit', 
+                        second: '2-digit',
+                        hour12: true 
+                      })}
                     </td>
                   </tr>
                 ))}
@@ -1670,7 +1678,14 @@ export default function HummingBirdMultiAgent() {
                       </span>
                     </td>
                     <td style={{ padding: '0.75rem', color: colors.textSecondary }}>
-                      {new Date(email.sent_at).toLocaleString()}
+                      {new Date(email.sent_at).toLocaleString('en-US', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric', 
+                        hour: 'numeric', 
+                        minute: '2-digit', 
+                        hour12: true 
+                      })}
                     </td>
                   </tr>
                 ))}
