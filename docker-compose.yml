@@ -6,7 +6,7 @@ services:
     container_name: ngrok-tunnel
     command:
       - "http"
-      - "--url=arched-lochlan-feverously.ngrok-free.dev"
+      - "--url=seagull-winning-personally.ngrok-free.app"
       - "hummingbird:7860"
     environment:
       - NGROK_AUTHTOKEN=33mYkfgSWvGRfauuCpGvhbepqle_6tTW58SUA9Zeg5CMyTshD
