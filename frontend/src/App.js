@@ -1962,6 +1962,8 @@ export default function HummingBirdMultiAgent() {
         </div>
       </footer>
 
+      </div>
+
       {/* Change Password Modal */}
       {showPasswordModal && (
         <div style={{
@@ -2129,7 +2131,6 @@ export default function HummingBirdMultiAgent() {
           </div>
         </div>
       )}
-      </div>
     </>
   );
 }
