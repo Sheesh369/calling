@@ -978,6 +978,8 @@ async def plivo_hangup(call_uuid: str, request: Request):
         
         # Extract hangup information
         hangup_cause = form_data.get("HangupCause", "")
+        hangup_cause_name = form_data.get("HangupCauseName", "")
+        hangup_cause_code = form_data.get("HangupCauseCode", "")
         hangup_source = form_data.get("HangupSource", "Unknown")
         call_status = form_data.get("CallStatus", "")
         ended_at = datetime.now().isoformat()
@@ -991,9 +993,10 @@ async def plivo_hangup(call_uuid: str, request: Request):
         current_status = call_data_store[call_uuid].get("status")
         if current_status not in ["completed", "in_progress"]:
             # Check if call was rejected/declined by the user
-            if hangup_cause == "Rejected" or "3020" in str(hangup_cause):
+            # Check HangupCauseName (Rejected) or HangupCauseCode (3020)
+            if hangup_cause_name == "Rejected" or hangup_cause_code == "3020":
                 status = "declined"
-                logger.info(f"Call {call_uuid} was declined/rejected by user")
+                logger.info(f"Call {call_uuid} was declined/rejected by user (HangupCauseName: {hangup_cause_name}, Code: {hangup_cause_code})")
             else:
                 # Set status to completed for all other cases
                 status = "completed"
