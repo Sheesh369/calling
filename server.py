@@ -553,7 +553,7 @@ async def process_call_queue():
                 
                 if call_uuid in call_data_store:
                     status = call_data_store[call_uuid].get("status")
-                    if status in ["completed", "failed", "declined"]:
+                    if status in ["completed", "failed", "declined", "invalid", "out_of_service", "nonexistent", "unallocated", "not_reachable"]:
                         logger.info(f"Call {call_uuid} finished with status: {status}")
                         break
             
@@ -992,11 +992,25 @@ async def plivo_hangup(call_uuid: str, request: Request):
         # Only update status if not already completed (avoid overwriting WebSocket status)
         current_status = call_data_store[call_uuid].get("status")
         if current_status not in ["completed", "in_progress"]:
-            # Check if call was rejected/declined by the user
-            # Check HangupCauseName (Rejected) or HangupCauseCode (3020)
+            # Map hangup causes to specific statuses
             if hangup_cause_name == "Rejected" or hangup_cause_code == "3020":
                 status = "declined"
-                logger.info(f"Call {call_uuid} was declined/rejected by user (HangupCauseName: {hangup_cause_name}, Code: {hangup_cause_code})")
+                logger.info(f"Call {call_uuid} was declined/rejected by user (Code: {hangup_cause_code})")
+            elif hangup_cause_name == "Invalid Destination Address" or hangup_cause_code == "2000":
+                status = "invalid"
+                logger.info(f"Call {call_uuid} has invalid number format (Code: {hangup_cause_code})")
+            elif hangup_cause_name == "Destination Out Of Service" or hangup_cause_code == "2010":
+                status = "out_of_service"
+                logger.info(f"Call {call_uuid} destination is out of service (Code: {hangup_cause_code})")
+            elif hangup_cause_name == "User does not exist anywhere" or hangup_cause_code == "3120":
+                status = "nonexistent"
+                logger.info(f"Call {call_uuid} destination number does not exist (Code: {hangup_cause_code})")
+            elif hangup_cause_name == "Unallocated number" or hangup_cause_code == "3050":
+                status = "unallocated"
+                logger.info(f"Call {call_uuid} destination number is unallocated (Code: {hangup_cause_code})")
+            elif hangup_cause_name == "No Answer" or hangup_cause_code == "3000":
+                status = "not_reachable"
+                logger.info(f"Call {call_uuid} destination not reachable/no answer (Code: {hangup_cause_code})")
             else:
                 # Set status to completed for all other cases
                 status = "completed"
