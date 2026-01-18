@@ -11,7 +11,7 @@ services:
     environment:
       - NGROK_AUTHTOKEN=2wOMeC9CkWjnbjQa0bvC42cNLsR_617fw5AQqYQVpBdwpckkX
     ports:
-      - "4040:4040"  # ngrok web interface
+      - "4041:4040"  # ngrok web interface
     networks:
       - hummingbird-network
     restart: unless-stopped

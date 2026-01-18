@@ -1252,38 +1252,28 @@ async def list_transcripts(user_id: int = None, current_user = Depends(get_curre
                             
                             # Extract cut-off date if CUT_OFF_DATE_PROVIDED is one of the outcomes
                             if "CUT_OFF_DATE_PROVIDED" in metadata["call_outcomes"]:
-                                # Look for date patterns in the summary
-                                
-                                # Get the summary section
-                                if "CALL SUMMARY" in content:
-                                    summary_start = content.index("CALL SUMMARY")
-                                    summary_section = content[summary_start:]
-                                    
-                                    # Look for common date patterns
-                                    # Pattern 1: "January 6, 2026" or "Jan 6, 2026"
-                                    date_pattern1 = r'(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})'
-                                    # Pattern 2: "2026-01-06" or "01/06/2026"
-                                    date_pattern2 = r'(\d{4})-(\d{2})-(\d{2})'
-                                    date_pattern3 = r'(\d{2})/(\d{2})/(\d{4})'
-                                    
-                                    match = re.search(date_pattern1, summary_section, re.IGNORECASE)
-                                    if match:
+                                # Extract date from the CUT_OFF_DATE_PROVIDED line specifically
+                                if "- CUT_OFF_DATE_PROVIDED:" in content:
+                                    try:
+                                        cutoff_line_start = content.index("- CUT_OFF_DATE_PROVIDED:")
+                                        cutoff_line_end = content.index("\n", cutoff_line_start)
+                                        cutoff_line = content[cutoff_line_start:cutoff_line_end]
+                                        
+                                        # Extract text after the colon
+                                        date_text = cutoff_line.split(":", 1)[1].strip()
+                                        
+                                        # Use python-dateutil to parse the date
+                                        from dateutil import parser as date_parser
                                         try:
-                                            date_str = f"{match.group(1)} {match.group(2)}, {match.group(3)}"
-                                            parsed_date = dt.strptime(date_str, "%B %d, %Y")
+                                            parsed_date = date_parser.parse(date_text, fuzzy=True)
                                             metadata["cut_off_date"] = parsed_date.strftime("%Y-%m-%d")
-                                        except:
-                                            try:
-                                                date_str = f"{match.group(1)} {match.group(2)}, {match.group(3)}"
-                                                parsed_date = dt.strptime(date_str, "%b %d, %Y")
-                                                metadata["cut_off_date"] = parsed_date.strftime("%Y-%m-%d")
-                                            except:
-                                                pass
-                                    
-                                    if not metadata["cut_off_date"]:
-                                        match = re.search(date_pattern2, summary_section)
-                                        if match:
-                                            metadata["cut_off_date"] = f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
+                                            logger.info(f"Extracted cutoff date from transcript {filename}: {metadata['cut_off_date']}")
+                                        except Exception as e:
+                                            logger.warning(f"Could not parse cutoff date from '{date_text}': {e}")
+                                            metadata["cut_off_date"] = None
+                                    except Exception as e:
+                                        logger.warning(f"Error extracting cutoff date from transcript {filename}: {e}")
+                                        metadata["cut_off_date"] = None
                         except Exception as e:
                             logger.error(f"Error parsing outcomes: {e}")
                             # Fallback to empty list

@@ -33,6 +33,7 @@ from pipecat.transports.websocket.fastapi import (
 )
 from openai import OpenAI
 import httpx
+from dateutil import parser as date_parser
 
 load_dotenv(override=True)
 
@@ -287,18 +288,44 @@ async def generate_call_summary(transcript_file: str):
         
         conversation_content = '\n'.join(conversation_lines)
         
+        # PRE-VALIDATION: Check if conversation is meaningful (language-agnostic)
+        # A meaningful conversation has either:
+        # - At least 3 messages OR
+        # - At least one message with 15+ characters
+        is_meaningful = False
+        if len(conversation_lines) >= 3:
+            is_meaningful = True
+        else:
+            for line in conversation_lines:
+                # Extract just the message content (after "USER:" or "ASSISTANT:")
+                if 'USER:' in line:
+                    message = line.split('USER:', 1)[1].strip()
+                elif 'ASSISTANT:' in line:
+                    message = line.split('ASSISTANT:', 1)[1].strip()
+                else:
+                    continue
+                
+                if len(message) >= 15:
+                    is_meaningful = True
+                    break
+        
         # Check for actual USER/ASSISTANT conversation messages
         if len(conversation_lines) == 0:  # No actual conversation
             logger.warning(f"Empty conversation in transcript: {transcript_file}")
             summary_text = "**CALL OUTCOMES:**\n- FAILED\n\nNo conversation recorded - call failed or customer did not answer."
+        elif not is_meaningful:
+            # Not a meaningful conversation - skip AI processing
+            logger.warning(f"Non-meaningful conversation in transcript: {transcript_file} (too short or no substantial messages)")
+            summary_text = "**CALL OUTCOMES:**\n- NO_COMMITMENT\n\nConversation was too brief or did not contain meaningful dialogue."
         else:
             # Create enhanced prompt for OpenAI with call outcome classification
             prompt = f"""Analyze this customer service call about payment reminder.
 
-IMPORTANT CONTEXT:
-- This conversation starts AFTER an initial greeting where the agent mentioned the invoice details
-- Any date mentioned by the CUSTOMER is a PAYMENT CUT-OFF DATE (when they will pay), NOT the invoice date
-- The invoice date was mentioned in the greeting (not shown here) and is in the past
+CRITICAL INSTRUCTIONS:
+- ONLY report what ACTUALLY happened in this conversation
+- Do NOT make assumptions about what was said before or after
+- If the customer did not explicitly commit to a payment date, mark as NO_COMMITMENT
+- Be precise and factual
 
 {conversation_content}
 
@@ -348,62 +375,98 @@ Keep the summary brief and professional."""
             summary_text = response.choices[0].message.content
             logger.info(f"Summary generated successfully for {transcript_file}")
             
+            # POST-AI VALIDATION: Ensure CUT_OFF_DATE_PROVIDED has a valid date
+            if "CUT_OFF_DATE_PROVIDED" in summary_text:
+                logger.info("Validating that CUT_OFF_DATE_PROVIDED has an extractable date...")
+                
+                # Try to extract date from CUT_OFF_DATE_PROVIDED line
+                cutoff_date_found = False
+                if "CUT_OFF_DATE_PROVIDED:" in summary_text or "- CUT_OFF_DATE_PROVIDED:" in summary_text:
+                    try:
+                        # Find the CUT_OFF_DATE_PROVIDED line
+                        if "- CUT_OFF_DATE_PROVIDED:" in summary_text:
+                            cutoff_line_start = summary_text.index("- CUT_OFF_DATE_PROVIDED:")
+                        else:
+                            cutoff_line_start = summary_text.index("CUT_OFF_DATE_PROVIDED:")
+                        
+                        cutoff_line_end = summary_text.index("\n", cutoff_line_start) if "\n" in summary_text[cutoff_line_start:] else len(summary_text)
+                        cutoff_line = summary_text[cutoff_line_start:cutoff_line_end]
+                        
+                        # Extract text after the colon
+                        if ":" in cutoff_line:
+                            date_text = cutoff_line.split(":", 1)[1].strip()
+                            
+                            # Try to parse with python-dateutil
+                            try:
+                                parsed_date = date_parser.parse(date_text, fuzzy=True)
+                                cutoff_date_found = True
+                                logger.info(f"Successfully extracted cutoff date: {parsed_date.strftime('%Y-%m-%d')}")
+                            except:
+                                logger.warning(f"Could not parse date from: {date_text}")
+                    except Exception as e:
+                        logger.warning(f"Error extracting date from CUT_OFF_DATE_PROVIDED line: {e}")
+                
+                # If no valid date found, remove CUT_OFF_DATE_PROVIDED and add NO_COMMITMENT
+                if not cutoff_date_found:
+                    logger.warning("CUT_OFF_DATE_PROVIDED found but no valid date extracted. Correcting summary...")
+                    
+                    # Remove CUT_OFF_DATE_PROVIDED outcome
+                    summary_lines = summary_text.split('\n')
+                    corrected_lines = []
+                    
+                    for line in summary_lines:
+                        if "CUT_OFF_DATE_PROVIDED" in line:
+                            continue
+                        corrected_lines.append(line)
+                    
+                    # Add NO_COMMITMENT if not already present
+                    if "NO_COMMITMENT" not in summary_text:
+                        # Find the CALL OUTCOMES section and add NO_COMMITMENT
+                        for i, line in enumerate(corrected_lines):
+                            if "**CALL OUTCOMES:**" in line:
+                                corrected_lines.insert(i + 1, "- NO_COMMITMENT: No valid payment date could be extracted")
+                                break
+                    
+                    summary_text = '\n'.join(corrected_lines)
+                    logger.info("Summary corrected: CUT_OFF_DATE_PROVIDED removed, NO_COMMITMENT added")
+            
             # VALIDATION: Check if cut-off date == invoice date
             if invoice_date and "CUT_OFF_DATE_PROVIDED" in summary_text:
                 logger.info("Validating cut-off date against invoice date...")
                 
-                # Extract cut-off date from summary
-                import re
-                from datetime import datetime as dt
-                
-                # Common date patterns
-                date_patterns = [
-                    r'(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})',
-                    r'(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})',
-                    r'(\d{1,2})[/-](\d{1,2})[/-](\d{4})',
-                    r'(\d{4})[/-](\d{1,2})[/-](\d{1,2})'
-                ]
-                
-                # Normalize invoice date
+                # Normalize invoice date using python-dateutil
                 invoice_date_normalized = None
-                for pattern in date_patterns:
-                    match = re.search(pattern, invoice_date, re.IGNORECASE)
-                    if match:
-                        try:
-                            if pattern == date_patterns[0]:  # Full month name
-                                invoice_date_normalized = dt.strptime(f"{match.group(1)} {match.group(2)}, {match.group(3)}", "%B %d, %Y").date()
-                            elif pattern == date_patterns[1]:  # Short month name
-                                invoice_date_normalized = dt.strptime(f"{match.group(1)} {match.group(2)}, {match.group(3)}", "%b %d, %Y").date()
-                            elif pattern == date_patterns[2]:  # DD/MM/YYYY or MM/DD/YYYY
-                                invoice_date_normalized = dt.strptime(f"{match.group(1)}/{match.group(2)}/{match.group(3)}", "%m/%d/%Y").date()
-                            elif pattern == date_patterns[3]:  # YYYY-MM-DD
-                                invoice_date_normalized = dt.strptime(f"{match.group(1)}-{match.group(2)}-{match.group(3)}", "%Y-%m-%d").date()
-                            break
-                        except:
-                            continue
+                try:
+                    invoice_date_normalized = date_parser.parse(invoice_date, fuzzy=True).date()
+                    logger.info(f"Parsed invoice date: {invoice_date_normalized}")
+                except Exception as e:
+                    logger.warning(f"Could not parse invoice date '{invoice_date}': {e}")
                 
                 # Extract cut-off date from summary (look in CUT_OFF_DATE_PROVIDED line)
                 cutoff_date_normalized = None
-                if "CUT_OFF_DATE_PROVIDED:" in summary_text:
-                    cutoff_line_start = summary_text.index("CUT_OFF_DATE_PROVIDED:")
-                    cutoff_line_end = summary_text.index("\n", cutoff_line_start) if "\n" in summary_text[cutoff_line_start:] else len(summary_text)
-                    cutoff_line = summary_text[cutoff_line_start:cutoff_line_end]
-                    
-                    for pattern in date_patterns:
-                        match = re.search(pattern, cutoff_line, re.IGNORECASE)
-                        if match:
+                if "CUT_OFF_DATE_PROVIDED:" in summary_text or "- CUT_OFF_DATE_PROVIDED:" in summary_text:
+                    try:
+                        # Find the CUT_OFF_DATE_PROVIDED line
+                        if "- CUT_OFF_DATE_PROVIDED:" in summary_text:
+                            cutoff_line_start = summary_text.index("- CUT_OFF_DATE_PROVIDED:")
+                        else:
+                            cutoff_line_start = summary_text.index("CUT_OFF_DATE_PROVIDED:")
+                        
+                        cutoff_line_end = summary_text.index("\n", cutoff_line_start) if "\n" in summary_text[cutoff_line_start:] else len(summary_text)
+                        cutoff_line = summary_text[cutoff_line_start:cutoff_line_end]
+                        
+                        # Extract text after the colon
+                        if ":" in cutoff_line:
+                            date_text = cutoff_line.split(":", 1)[1].strip()
+                            
+                            # Parse with python-dateutil
                             try:
-                                if pattern == date_patterns[0]:
-                                    cutoff_date_normalized = dt.strptime(f"{match.group(1)} {match.group(2)}, {match.group(3)}", "%B %d, %Y").date()
-                                elif pattern == date_patterns[1]:
-                                    cutoff_date_normalized = dt.strptime(f"{match.group(1)} {match.group(2)}, {match.group(3)}", "%b %d, %Y").date()
-                                elif pattern == date_patterns[2]:
-                                    cutoff_date_normalized = dt.strptime(f"{match.group(1)}/{match.group(2)}/{match.group(3)}", "%m/%d/%Y").date()
-                                elif pattern == date_patterns[3]:
-                                    cutoff_date_normalized = dt.strptime(f"{match.group(1)}-{match.group(2)}-{match.group(3)}", "%Y-%m-%d").date()
-                                break
-                            except:
-                                continue
+                                cutoff_date_normalized = date_parser.parse(date_text, fuzzy=True).date()
+                                logger.info(f"Parsed cutoff date: {cutoff_date_normalized}")
+                            except Exception as e:
+                                logger.warning(f"Could not parse cutoff date from '{date_text}': {e}")
+                    except Exception as e:
+                        logger.warning(f"Error extracting cutoff date: {e}")
                 
                 # Compare dates
                 if invoice_date_normalized and cutoff_date_normalized:
