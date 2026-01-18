@@ -990,14 +990,21 @@ async def plivo_hangup(call_uuid: str, request: Request):
         # Only update status if not already completed (avoid overwriting WebSocket status)
         current_status = call_data_store[call_uuid].get("status")
         if current_status not in ["completed", "in_progress"]:
-            # Set status to completed so queue can move on
-            call_data_store[call_uuid]["status"] = "completed"
+            # Check if call was rejected/declined by the user
+            if hangup_cause == "Rejected" or "3020" in str(hangup_cause):
+                status = "declined"
+                logger.info(f"Call {call_uuid} was declined/rejected by user")
+            else:
+                # Set status to completed for all other cases
+                status = "completed"
+            
+            call_data_store[call_uuid]["status"] = status
             
             # Persist to database
-            db.update_call_status(call_uuid, "completed", ended_at=ended_at, 
+            db.update_call_status(call_uuid, status, ended_at=ended_at, 
                                 hangup_cause=hangup_cause, hangup_source=hangup_source)
             
-            logger.info(f"Call {call_uuid} marked as completed via hangup webhook")
+            logger.info(f"Call {call_uuid} marked as {status} via hangup webhook")
         else:
             logger.info(f"Call {call_uuid} already in status '{current_status}', not overwriting")
         
