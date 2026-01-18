@@ -553,7 +553,7 @@ async def process_call_queue():
                 
                 if call_uuid in call_data_store:
                     status = call_data_store[call_uuid].get("status")
-                    if status in ["completed", "failed"]:
+                    if status in ["completed", "failed", "declined"]:
                         logger.info(f"Call {call_uuid} finished with status: {status}")
                         break
             

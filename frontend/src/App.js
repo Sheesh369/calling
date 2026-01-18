@@ -369,7 +369,7 @@ export default function HummingBirdMultiAgent() {
             const statusData = await statusResponse.json();
             const allCompleted = data.call_uuids.every(uuid => {
               const call = statusData.calls?.find(c => c.call_uuid === uuid);
-              return call && (call.status === 'completed' || call.status === 'failed');
+              return call && (call.status === 'completed' || call.status === 'failed' || call.status === 'declined');
             });
             
             if (allCompleted) {
@@ -904,9 +904,9 @@ export default function HummingBirdMultiAgent() {
                         fontSize: '0.8125rem',
                         fontWeight: '500',
                         background: call.status === 'completed' ? '#E8F5E9' :
-                          call.status === 'failed' ? '#FFEBEE' : '#FFF3E0',
+                          call.status === 'failed' || call.status === 'declined' ? '#FFEBEE' : '#FFF3E0',
                         color: call.status === 'completed' ? '#2E7D32' :
-                          call.status === 'failed' ? '#C62828' : '#F57C00'
+                          call.status === 'failed' || call.status === 'declined' ? '#C62828' : '#F57C00'
                       }}>
                         {call.status}
                       </span>
