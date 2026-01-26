@@ -371,7 +371,7 @@ async def generate_greeting_audio(text: str, call_uuid: str) -> str:
         payload = {
             "inputs": [text],
             "target_language_code": "en-IN",
-            "speaker": "amit",  # Male voice - matches the bot's voice
+            "speaker": "abhilash",  # Male voice - matches the bot's voice
             "pitch": 0,
             "pace": 1.0,
             "loudness": 1.5,
@@ -560,7 +560,7 @@ async def process_call_queue():
         payload = {
             "inputs": [text],
             "target_language_code": "en-IN",
-            "speaker": "amit",  # Male voice - matches the bot's voice
+            "speaker": "abhilash",  # Male voice - matches the bot's voice
             "pitch": 0,
             "pace": 1.0,
             "loudness": 1.5,

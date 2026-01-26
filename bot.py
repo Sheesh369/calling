@@ -573,42 +573,42 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool, custom_data: di
     tamil_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="amit",
+        voice_id="abhilash",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.TA)
     )
 
     english_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="amit",
+        voice_id="abhilash",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.EN)
     )
 
     hindi_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="amit",
+        voice_id="abhilash",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.HI)
     )
 
     telugu_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="amit",
+        voice_id="abhilash",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.TE)
     )
 
     malayalam_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="amit",
+        voice_id="abhilash",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.ML)
     )
 
     kannada_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="amit",
+        voice_id="abhilash",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.KN)
     )
 
