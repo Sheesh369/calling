@@ -1000,45 +1000,25 @@ export default function HummingBirdMultiAgent() {
             <RefreshCw size={14} />
             Refresh
           </button>
-          <select
-            id="export-status-filter"
-            style={{
-              padding: '0.5rem',
-              border: `1px solid ${colors.borderLight}`,
-              borderRadius: '6px',
-              fontSize: '0.875rem',
-              outline: 'none',
-              cursor: 'pointer',
-              background: colors.background
-            }}
-          >
-            <option value="all">Export: All</option>
-            <option value="completed">Export: Completed</option>
-            <option value="in_progress">Export: In Progress</option>
-            <option value="calling">Export: Calling</option>
-            <option value="initiated">Export: Initiated</option>
-            <option value="queued">Export: Queued</option>
-            <option value="connected">Export: Connected</option>
-            <option value="greeting_playing">Export: Greeting Playing</option>
-            <option value="failed">Export: Failed</option>
-            <option value="declined">Export: Declined</option>
-            <option value="invalid">Export: Invalid Number</option>
-            <option value="out_of_service">Export: Out of Service</option>
-            <option value="nonexistent">Export: Nonexistent</option>
-            <option value="unallocated">Export: Unallocated</option>
-            <option value="not_reachable">Export: Not Reachable</option>
-          </select>
           <button
             onClick={async () => {
               try {
-                const statusFilter = document.getElementById('export-status-filter').value;
-                const response = await fetchWithAuth(`/api/export/call_status?status=${statusFilter}`);
+                // Build query params with all active filters
+                const params = new URLSearchParams();
+                params.append('status', statusFilter);
+                params.append('date_filter', dateFilter);
+                if (dateFilter === 'custom') {
+                  if (customStartDate) params.append('start_date', customStartDate);
+                  if (customEndDate) params.append('end_date', customEndDate);
+                }
+                
+                const response = await fetchWithAuth(`/api/export/call_status?${params.toString()}`);
                 if (response.ok) {
                   const blob = await response.blob();
                   const url = window.URL.createObjectURL(blob);
                   const a = document.createElement('a');
                   a.href = url;
-                  a.download = `call_status_${statusFilter}_${new Date().toISOString().slice(0,10)}.csv`;
+                  a.download = `call_status_filtered_${new Date().toISOString().slice(0,10)}.csv`;
                   document.body.appendChild(a);
                   a.click();
                   window.URL.revokeObjectURL(url);
@@ -1439,13 +1419,24 @@ export default function HummingBirdMultiAgent() {
               <button
                 onClick={async () => {
                   try {
-                    const response = await fetchWithAuth('/api/export/transcripts');
+                    // Build query params with all active filters
+                    const params = new URLSearchParams();
+                    params.append('date_filter', dateFilter);
+                    if (dateFilter === 'custom') {
+                      if (customStartDate) params.append('start_date', customStartDate);
+                      if (customEndDate) params.append('end_date', customEndDate);
+                    }
+                    if (searchQuery) params.append('search', searchQuery);
+                    params.append('outcome', outcomeFilter);
+                    if (cutOffDateFilter) params.append('cutoff_date', cutOffDateFilter);
+                    
+                    const response = await fetchWithAuth(`/api/export/transcripts?${params.toString()}`);
                     if (response.ok) {
                       const blob = await response.blob();
                       const url = window.URL.createObjectURL(blob);
                       const a = document.createElement('a');
                       a.href = url;
-                      a.download = `transcripts_export_${new Date().toISOString().slice(0,10)}.csv`;
+                      a.download = `transcripts_filtered_${new Date().toISOString().slice(0,10)}.csv`;
                       document.body.appendChild(a);
                       a.click();
                       window.URL.revokeObjectURL(url);

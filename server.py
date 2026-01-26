@@ -279,15 +279,22 @@ async def reset_user_password(user_id: int, request: ChangePasswordRequest, curr
 # ============================================================================
 
 @app.get("/api/export/call_status")
-async def export_call_status(status: str = "all", current_user = Depends(get_current_user)):
+async def export_call_status(
+    status: str = "all",
+    date_filter: str = "all",
+    start_date: str = None,
+    end_date: str = None,
+    current_user = Depends(get_current_user)
+):
     """
-    Export call data filtered by status
+    Export call data filtered by status and date
     Returns CSV with: customer data + call status + created_at + call_outcomes + cutoff_date
     """
     try:
         import io
         import csv
         from pathlib import Path
+        from datetime import datetime, timedelta
         
         # Get data from database (same as transcripts export)
         data = db.get_export_data_with_transcripts(user_id=current_user["user_id"])
@@ -298,6 +305,54 @@ async def export_call_status(status: str = "all", current_user = Depends(get_cur
         # Filter by status if specified
         if status != "all":
             data = [record for record in data if record["call_status"] == status]
+        
+        # Apply date filter
+        if date_filter != "all":
+            now = datetime.now()
+            today = datetime(now.year, now.month, now.day)
+            
+            filtered_data = []
+            for record in data:
+                try:
+                    # Parse the created_at timestamp
+                    record_date = datetime.fromisoformat(record["created_at"].replace('Z', '+00:00'))
+                    
+                    if date_filter == "today":
+                        if record_date >= today:
+                            filtered_data.append(record)
+                    elif date_filter == "yesterday":
+                        yesterday = today - timedelta(days=1)
+                        if yesterday <= record_date < today:
+                            filtered_data.append(record)
+                    elif date_filter == "last7days":
+                        last7days = today - timedelta(days=7)
+                        if record_date >= last7days:
+                            filtered_data.append(record)
+                    elif date_filter == "last30days":
+                        last30days = today - timedelta(days=30)
+                        if record_date >= last30days:
+                            filtered_data.append(record)
+                    elif date_filter == "custom":
+                        if start_date and end_date:
+                            start = datetime.fromisoformat(start_date)
+                            end = datetime.fromisoformat(end_date)
+                            end = end.replace(hour=23, minute=59, second=59)
+                            if start <= record_date <= end:
+                                filtered_data.append(record)
+                        elif start_date:
+                            start = datetime.fromisoformat(start_date)
+                            if record_date >= start:
+                                filtered_data.append(record)
+                        elif end_date:
+                            end = datetime.fromisoformat(end_date)
+                            end = end.replace(hour=23, minute=59, second=59)
+                            if record_date <= end:
+                                filtered_data.append(record)
+                except Exception as e:
+                    logger.warning(f"Error parsing date for record: {e}")
+                    continue
+            
+            data = filtered_data
         
         # Enrich with call outcomes from transcript files (same logic as transcripts export)
         transcript_base_dir = Path(f"transcripts/user_{current_user['user_id']}")
@@ -394,15 +449,24 @@ async def export_call_status(status: str = "all", current_user = Depends(get_cur
 
 
 @app.get("/api/export/transcripts")
-async def export_transcripts(current_user = Depends(get_current_user)):
+async def export_transcripts(
+    date_filter: str = "all",
+    start_date: str = None,
+    end_date: str = None,
+    search: str = None,
+    outcome: str = "all",
+    cutoff_date: str = None,
+    current_user = Depends(get_current_user)
+):
     """
-    Export call data with transcript outcomes
+    Export call data with transcript outcomes filtered by date, search, outcome, and cutoff date
     Returns CSV with: customer data + call status + created_at + call_outcomes
     """
     try:
         import io
         import csv
         from pathlib import Path
+        from datetime import datetime, timedelta
         
         # Get data from database
         data = db.get_export_data_with_transcripts(user_id=current_user["user_id"])
@@ -473,6 +537,78 @@ async def export_transcripts(current_user = Depends(get_current_user)):
             record["cutoff_date"] = cutoff_date
             # Remove call_uuid from export
             del record["call_uuid"]
+        
+        # Apply filters after enriching data
+        filtered_data = []
+        
+        for record in data:
+            # Date filter
+            if date_filter != "all":
+                try:
+                    record_date = datetime.fromisoformat(record["created_at"].replace('Z', '+00:00'))
+                    now = datetime.now()
+                    today = datetime(now.year, now.month, now.day)
+                    
+                    if date_filter == "today":
+                        if record_date < today:
+                            continue
+                    elif date_filter == "yesterday":
+                        yesterday = today - timedelta(days=1)
+                        if not (yesterday <= record_date < today):
+                            continue
+                    elif date_filter == "last7days":
+                        last7days = today - timedelta(days=7)
+                        if record_date < last7days:
+                            continue
+                    elif date_filter == "last30days":
+                        last30days = today - timedelta(days=30)
+                        if record_date < last30days:
+                            continue
+                    elif date_filter == "custom":
+                        if start_date and end_date:
+                            start = datetime.fromisoformat(start_date)
+                            end = datetime.fromisoformat(end_date)
+                            end = end.replace(hour=23, minute=59, second=59)
+                            if not (start <= record_date <= end):
+                                continue
+                        elif start_date:
+                            start = datetime.fromisoformat(start_date)
+                            if record_date < start:
+                                continue
+                        elif end_date:
+                            end = datetime.fromisoformat(end_date)
+                            end = end.replace(hour=23, minute=59, second=59)
+                            if record_date > end:
+                                continue
+                except Exception as e:
+                    logger.warning(f"Error parsing date for record: {e}")
+                    continue
+            
+            # Search filter
+            if search:
+                search_lower = search.lower()
+                if not (
+                    search_lower in record.get("customer_name", "").lower() or
+                    search_lower in record.get("invoice_number", "").lower() or
+                    search_lower in record.get("phone_number", "").lower() or
+                    search_lower in record.get("call_status", "").lower()
+                ):
+                    continue
+            
+            # Outcome filter
+            if outcome != "all":
+                record_outcomes = record.get("call_outcomes", "")
+                if outcome not in record_outcomes:
+                    continue
+            
+            # Cutoff date filter (only applies when outcome is CUT_OFF_DATE_PROVIDED)
+            if cutoff_date and outcome == "CUT_OFF_DATE_PROVIDED":
+                if record.get("cutoff_date") != cutoff_date:
+                    continue
+            
+            filtered_data.append(record)
+        
+        data = filtered_data
         
         # Create CSV in memory
         output = io.StringIO()
