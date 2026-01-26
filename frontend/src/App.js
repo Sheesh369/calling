@@ -332,7 +332,9 @@ export default function HummingBirdMultiAgent() {
           invoice_number: row.invoice_number,
           invoice_date: row.invoice_date,
           total_amount: row.total_amount,
-          outstanding_balance: row.outstanding_balance
+          outstanding_balance: row.outstanding_balance,
+          whatsapp_number: row.whatsapp_number || row.phone_number || "",
+          email: row.email || ""
         }
       }));
 

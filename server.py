@@ -360,8 +360,9 @@ async def export_transcripts(current_user = Depends(get_current_user)):
                         transcript_file = file
                         break
             
-            # Extract call outcomes from transcript
+            # Extract call outcomes and cutoff date from transcript
             call_outcomes = "N/A"
+            cutoff_date = ""
             if transcript_file and transcript_file.exists():
                 try:
                     with open(transcript_file, "r", encoding="utf-8") as f:
@@ -386,12 +387,24 @@ async def export_transcripts(current_user = Depends(get_current_user)):
                                 outcome = line[2:].split(':')[0].strip()
                                 if outcome:
                                     outcomes.append(outcome)
+                                
+                                # Extract cutoff date if outcome is CUT_OFF_DATE_PROVIDED
+                                if outcome == "CUT_OFF_DATE_PROVIDED" and ':' in line:
+                                    date_text = line.split(':', 1)[1].strip()
+                                    # Try to parse the date
+                                    try:
+                                        from dateutil import parser as date_parser
+                                        parsed_date = date_parser.parse(date_text, fuzzy=True)
+                                        cutoff_date = parsed_date.strftime("%Y-%m-%d")
+                                    except:
+                                        cutoff_date = date_text  # Use raw text if parsing fails
                         
                         call_outcomes = ", ".join(outcomes) if outcomes else "N/A"
                 except Exception as e:
                     logger.warning(f"Error reading transcript for {call_uuid}: {e}")
             
             record["call_outcomes"] = call_outcomes
+            record["cutoff_date"] = cutoff_date
             # Remove call_uuid from export
             del record["call_uuid"]
         
@@ -400,7 +413,7 @@ async def export_transcripts(current_user = Depends(get_current_user)):
         writer = csv.DictWriter(output, fieldnames=[
             "customer_name", "phone_number", "whatsapp_number", "email",
             "invoice_number", "invoice_date", "total_amount", "outstanding_balance",
-            "call_status", "created_at", "call_outcomes"
+            "call_status", "created_at", "call_outcomes", "cutoff_date"
         ])
         
         writer.writeheader()

@@ -614,7 +614,7 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool, custom_data: di
 
     # Build system prompt (based on BOTO.py with new features added)
     system_content = (
-        f"CURRENT DATE AND TIME: Today is {today_str} (India time).\n\n"
+        f"INTERNAL CONTEXT (DO NOT SAY THIS TO USER): Today is {today_str} (India time). Use this to calculate dates.\n\n"
         "You are a friendly multilingual assistant Sara calling from Hummingbird to remind customers about pending payments. "
         "IMPORTANT: The greeting has already been delivered. Do NOT repeat 'Hello! This is Sara from Hummingbird' or any introduction. Start directly with verifying the customer or discussing the invoice. "
         "\n\n"
