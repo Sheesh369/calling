@@ -280,16 +280,26 @@ class Database:
             conn.close()
     
     def get_calls(self, user_id=None):
-        """Get all calls or filter by user_id"""
+        """Get all calls or filter by user_id, including customer data"""
         import json
         
         conn = self.get_connection()
         cursor = conn.cursor()
         
+        # Join calls with customer_data to get whatsapp_number and email
+        query = """
+            SELECT c.*, cd.whatsapp_number, cd.email
+            FROM calls c
+            LEFT JOIN customer_data cd ON c.call_uuid = cd.call_uuid
+            WHERE 1=1
+        """
+        
         if user_id is None:
-            cursor.execute("SELECT * FROM calls ORDER BY created_at DESC")
+            query += " ORDER BY c.created_at DESC"
+            cursor.execute(query)
         else:
-            cursor.execute("SELECT * FROM calls WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
+            query += " AND c.user_id = ? ORDER BY c.created_at DESC"
+            cursor.execute(query, (user_id,))
         
         rows = cursor.fetchall()
         conn.close()
@@ -313,7 +323,9 @@ class Database:
                 "hangup_cause": row[8],
                 "hangup_source": row[9],
                 "custom_data": custom_data,
-                "plivo_call_uuid": row[11]
+                "plivo_call_uuid": row[11],
+                "whatsapp_number": row[12] if len(row) > 12 else "",
+                "email": row[13] if len(row) > 13 else ""
             })
         
         return calls

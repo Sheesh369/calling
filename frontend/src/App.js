@@ -306,12 +306,14 @@ export default function HummingBirdMultiAgent() {
         callMap[call.call_uuid] = call;
       });
 
-      // Enrich transcripts with phone number from calls
+      // Enrich transcripts with phone number, whatsapp_number, and email from calls
       const enrichedTranscripts = data.transcripts?.map(transcript => {
         const call = callMap[transcript.call_uuid];
         return {
           ...transcript,
-          phone_number: call?.phone_number || 'N/A'
+          phone_number: call?.phone_number || 'N/A',
+          whatsapp_number: call?.whatsapp_number || '',
+          email: call?.email || ''
         };
       }) || [];
 

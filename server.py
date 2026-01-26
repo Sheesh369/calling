@@ -1556,6 +1556,8 @@ async def list_calls(user_id: int = None, current_user = Depends(get_current_use
                 "ended_at": memory_data.get("ended_at", db_call["ended_at"]),
                 "customer_name": db_call["customer_name"] or "Unknown",
                 "invoice_number": db_call["invoice_number"] or "N/A",
+                "whatsapp_number": db_call.get("whatsapp_number", ""),
+                "email": db_call.get("email", ""),
                 "user_id": db_call["user_id"]
             })
         else:
@@ -1568,6 +1570,8 @@ async def list_calls(user_id: int = None, current_user = Depends(get_current_use
                 "ended_at": db_call["ended_at"],
                 "customer_name": db_call["customer_name"] or "Unknown",
                 "invoice_number": db_call["invoice_number"] or "N/A",
+                "whatsapp_number": db_call.get("whatsapp_number", ""),
+                "email": db_call.get("email", ""),
                 "user_id": db_call["user_id"]
             })
     
