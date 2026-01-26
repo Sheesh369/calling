@@ -821,6 +821,63 @@ export default function HummingBirdMultiAgent() {
           Call Status
         </h3>
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          {/* Export Button with Status Filter */}
+          <select
+            id="export-status-filter"
+            style={{
+              padding: '0.5rem',
+              border: `1px solid ${colors.borderLight}`,
+              borderRadius: '6px',
+              fontSize: '0.875rem',
+              outline: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            <option value="all">All Status</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+            <option value="calling">Calling</option>
+            <option value="in_progress">In Progress</option>
+            <option value="initiated">Initiated</option>
+          </select>
+          <button
+            onClick={async () => {
+              try {
+                const statusFilter = document.getElementById('export-status-filter').value;
+                const response = await fetchWithAuth(`/api/export/call_status?status=${statusFilter}`);
+                if (response.ok) {
+                  const blob = await response.blob();
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `call_status_${statusFilter}_${new Date().toISOString().slice(0,10)}.csv`;
+                  document.body.appendChild(a);
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                  document.body.removeChild(a);
+                } else {
+                  alert('Export failed: ' + await response.text());
+                }
+              } catch (err) {
+                alert('Error exporting: ' + err.message);
+              }
+            }}
+            style={{
+              padding: '0.5rem 1rem',
+              background: colors.primary,
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <Upload size={14} />
+            Export CSV
+          </button>
           <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem' }}>
             <input
               type="checkbox"
@@ -1012,24 +1069,63 @@ export default function HummingBirdMultiAgent() {
             <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: colors.text }}>
               Transcripts
             </h3>
-            <button
-              onClick={fetchTranscripts}
-              style={{
-                padding: '0.5rem 1rem',
-                background: colors.primary,
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem'
-              }}
-            >
-              <RefreshCw size={14} />
-              Refresh
-            </button>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              <button
+                onClick={async () => {
+                  try {
+                    const response = await fetchWithAuth('/api/export/transcripts');
+                    if (response.ok) {
+                      const blob = await response.blob();
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `transcripts_export_${new Date().toISOString().slice(0,10)}.csv`;
+                      document.body.appendChild(a);
+                      a.click();
+                      window.URL.revokeObjectURL(url);
+                      document.body.removeChild(a);
+                    } else {
+                      alert('Export failed: ' + await response.text());
+                    }
+                  } catch (err) {
+                    alert('Error exporting: ' + err.message);
+                  }
+                }}
+                style={{
+                  padding: '0.5rem 1rem',
+                  background: colors.primary,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                <Upload size={14} />
+                Export CSV
+              </button>
+              <button
+                onClick={fetchTranscripts}
+                style={{
+                  padding: '0.5rem 1rem',
+                  background: colors.primary,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                <RefreshCw size={14} />
+                Refresh
+              </button>
+            </div>
           </div>
 
           {/* Search Bar */}
