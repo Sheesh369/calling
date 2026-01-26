@@ -96,6 +96,12 @@ export default function HummingBirdMultiAgent() {
   const [outcomeFilter, setOutcomeFilter] = useState('all');
   const [cutOffDateFilter, setCutOffDateFilter] = useState('');
   const [expandedTranscript, setExpandedTranscript] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all'); // Add status filter state
+  
+  // Date filter states
+  const [dateFilter, setDateFilter] = useState('all'); // 'all', 'today', 'yesterday', 'last7days', 'last30days', 'custom'
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
   
   // Super Admin states
   const [selectedUserId, setSelectedUserId] = useState(null); // null = own data, 0 = all users, number = specific user
@@ -562,6 +568,42 @@ export default function HummingBirdMultiAgent() {
     }, 0);
   }, [logout, navigate]);
 
+  // Date filtering helper function
+  const filterByDate = (dateString) => {
+    if (dateFilter === 'all') return true;
+    
+    const itemDate = new Date(dateString);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    switch (dateFilter) {
+      case 'today':
+        return itemDate >= today;
+      case 'yesterday':
+        const tomorrowStart = new Date(today);
+        tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+        return itemDate >= yesterday && itemDate < today;
+      case 'last7days':
+        const last7Days = new Date(today);
+        last7Days.setDate(last7Days.getDate() - 7);
+        return itemDate >= last7Days;
+      case 'last30days':
+        const last30Days = new Date(today);
+        last30Days.setDate(last30Days.getDate() - 30);
+        return itemDate >= last30Days;
+      case 'custom':
+        if (!customStartDate && !customEndDate) return true;
+        const start = customStartDate ? new Date(customStartDate) : new Date(0);
+        const end = customEndDate ? new Date(customEndDate) : new Date();
+        end.setHours(23, 59, 59, 999); // Include entire end date
+        return itemDate >= start && itemDate <= end;
+      default:
+        return true;
+    }
+  };
+
   // Handle password modal close with batched updates
   const closePasswordModal = useCallback(() => {
     setShowPasswordModal(false);
@@ -818,12 +860,146 @@ export default function HummingBirdMultiAgent() {
       padding: '2rem',
       border: `1px solid ${colors.borderLight}`
     }}>
+      {/* Filters Section */}
+      <div style={{ 
+        marginBottom: '1.5rem', 
+        padding: '1rem', 
+        background: colors.backgroundSecondary, 
+        borderRadius: '6px',
+        border: `1px solid ${colors.borderLight}`
+      }}>
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Date Filter */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: colors.textSecondary }}>Date Range</label>
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              style={{
+                padding: '0.5rem',
+                border: `1px solid ${colors.borderLight}`,
+                borderRadius: '6px',
+                fontSize: '0.875rem',
+                outline: 'none',
+                cursor: 'pointer',
+                background: colors.background
+              }}
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="last7days">Last 7 Days</option>
+              <option value="last30days">Last 30 Days</option>
+              <option value="custom">Custom Range</option>
+            </select>
+          </div>
+          
+          {/* Custom Date Range Pickers */}
+          {dateFilter === 'custom' && (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: colors.textSecondary }}>Start Date</label>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  style={{
+                    padding: '0.5rem',
+                    border: `1px solid ${colors.borderLight}`,
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    background: colors.background
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: colors.textSecondary }}>End Date</label>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  style={{
+                    padding: '0.5rem',
+                    border: `1px solid ${colors.borderLight}`,
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    background: colors.background
+                  }}
+                />
+              </div>
+            </>
+          )}
+          
+          {/* Status Filter */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <label style={{ fontSize: '0.75rem', fontWeight: '600', color: colors.textSecondary }}>Call Status</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{
+                padding: '0.5rem',
+                border: `1px solid ${colors.borderLight}`,
+                borderRadius: '6px',
+                fontSize: '0.875rem',
+                outline: 'none',
+                cursor: 'pointer',
+                background: colors.background
+              }}
+            >
+              <option value="all">All Status</option>
+              <option value="completed">Completed</option>
+              <option value="in_progress">In Progress</option>
+              <option value="calling">Calling</option>
+              <option value="initiated">Initiated</option>
+              <option value="queued">Queued</option>
+              <option value="connected">Connected</option>
+              <option value="greeting_playing">Greeting Playing</option>
+              <option value="failed">Failed</option>
+              <option value="declined">Declined</option>
+              <option value="invalid">Invalid Number</option>
+              <option value="out_of_service">Out of Service</option>
+              <option value="nonexistent">Nonexistent</option>
+              <option value="unallocated">Unallocated</option>
+              <option value="not_reachable">Not Reachable</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Header with Title and Actions */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: colors.text }}>
           Call Status
         </h3>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          {/* Export Button with Status Filter */}
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem' }}>
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+            />
+            Auto-refresh
+          </label>
+          <button
+            onClick={fetchCallStatus}
+            style={{
+              padding: '0.5rem 1rem',
+              background: colors.background,
+              color: colors.text,
+              border: `1px solid ${colors.borderLight}`,
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
+            <RefreshCw size={14} />
+            Refresh
+          </button>
           <select
             id="export-status-filter"
             style={{
@@ -832,15 +1008,25 @@ export default function HummingBirdMultiAgent() {
               borderRadius: '6px',
               fontSize: '0.875rem',
               outline: 'none',
-              cursor: 'pointer'
+              cursor: 'pointer',
+              background: colors.background
             }}
           >
-            <option value="all">All Status</option>
-            <option value="completed">Completed</option>
-            <option value="failed">Failed</option>
-            <option value="calling">Calling</option>
-            <option value="in_progress">In Progress</option>
-            <option value="initiated">Initiated</option>
+            <option value="all">Export: All</option>
+            <option value="completed">Export: Completed</option>
+            <option value="in_progress">Export: In Progress</option>
+            <option value="calling">Export: Calling</option>
+            <option value="initiated">Export: Initiated</option>
+            <option value="queued">Export: Queued</option>
+            <option value="connected">Export: Connected</option>
+            <option value="greeting_playing">Export: Greeting Playing</option>
+            <option value="failed">Export: Failed</option>
+            <option value="declined">Export: Declined</option>
+            <option value="invalid">Export: Invalid Number</option>
+            <option value="out_of_service">Export: Out of Service</option>
+            <option value="nonexistent">Export: Nonexistent</option>
+            <option value="unallocated">Export: Unallocated</option>
+            <option value="not_reachable">Export: Not Reachable</option>
           </select>
           <button
             onClick={async () => {
@@ -880,32 +1066,6 @@ export default function HummingBirdMultiAgent() {
             <Upload size={14} />
             Export CSV
           </button>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem' }}>
-            <input
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => setAutoRefresh(e.target.checked)}
-            />
-            Auto-refresh
-          </label>
-          <button
-            onClick={fetchCallStatus}
-            style={{
-              padding: '0.5rem 1rem',
-              background: colors.primary,
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '0.875rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem'
-            }}
-          >
-            <RefreshCw size={14} />
-            Refresh
-          </button>
         </div>
       </div>
 
@@ -913,24 +1073,24 @@ export default function HummingBirdMultiAgent() {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
             <div style={{ padding: '1rem', background: colors.backgroundSecondary, borderRadius: '6px', textAlign: 'center' }}>
-              <div style={{ fontSize: '1.5rem', fontWeight: '600', color: colors.text }}>{callStatus.length}</div>
-              <div style={{ fontSize: '0.875rem', color: colors.textSecondary }}>Total Calls</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: '600', color: colors.text }}>{callStatus.filter(c => (statusFilter === 'all' || c.status === statusFilter) && filterByDate(c.created_at)).length}</div>
+              <div style={{ fontSize: '0.875rem', color: colors.textSecondary }}>{statusFilter === 'all' ? 'Total Calls' : 'Filtered Calls'}</div>
             </div>
             <div style={{ padding: '1rem', background: colors.backgroundSecondary, borderRadius: '6px', textAlign: 'center' }}>
               <div style={{ fontSize: '1.5rem', fontWeight: '600', color: '#4CAF50' }}>
-                {callStatus.filter(c => c.status === 'completed').length}
+                {callStatus.filter(c => c.status === 'completed' && filterByDate(c.created_at)).length}
               </div>
               <div style={{ fontSize: '0.875rem', color: colors.textSecondary }}>Completed</div>
             </div>
             <div style={{ padding: '1rem', background: colors.backgroundSecondary, borderRadius: '6px', textAlign: 'center' }}>
               <div style={{ fontSize: '1.5rem', fontWeight: '600', color: '#FF9800' }}>
-                {callStatus.filter(c => ['calling', 'connected', 'in_progress'].includes(c.status)).length}
+                {callStatus.filter(c => ['calling', 'connected', 'in_progress', 'greeting_playing'].includes(c.status) && filterByDate(c.created_at)).length}
               </div>
               <div style={{ fontSize: '0.875rem', color: colors.textSecondary }}>In Progress</div>
             </div>
             <div style={{ padding: '1rem', background: colors.backgroundSecondary, borderRadius: '6px', textAlign: 'center' }}>
               <div style={{ fontSize: '1.5rem', fontWeight: '600', color: '#F44336' }}>
-                {callStatus.filter(c => c.status === 'failed').length}
+                {callStatus.filter(c => ['failed', 'declined', 'invalid', 'out_of_service', 'nonexistent', 'unallocated', 'not_reachable'].includes(c.status) && filterByDate(c.created_at)).length}
               </div>
               <div style={{ fontSize: '0.875rem', color: colors.textSecondary }}>Failed</div>
             </div>
@@ -939,25 +1099,26 @@ export default function HummingBirdMultiAgent() {
           <div style={{
             maxHeight: '400px',
             overflowY: 'auto',
+            overflowX: 'auto',
             border: `1px solid ${colors.borderLight}`,
             borderRadius: '6px'
           }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem', tableLayout: 'fixed', minWidth: '900px' }}>
               <thead style={{ background: colors.backgroundSecondary, position: 'sticky', top: 0 }}>
                 <tr>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Customer</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Invoice</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Phone</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Status</th>
-                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600' }}>Created</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', width: '20%' }}>Customer</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', width: '15%' }}>Invoice</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', width: '20%' }}>Phone</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', width: '15%' }}>Status</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: '600', width: '30%' }}>Created</th>
                 </tr>
               </thead>
               <tbody>
-                {callStatus.map((call, idx) => (
+                {callStatus.filter(call => (statusFilter === 'all' || call.status === statusFilter) && filterByDate(call.created_at)).map((call, idx) => (
                   <tr key={idx} style={{ borderBottom: `1px solid ${colors.borderLight}` }}>
-                    <td style={{ padding: '0.75rem', color: colors.textSecondary }}>{call.customer_name}</td>
-                    <td style={{ padding: '0.75rem', color: colors.textSecondary }}>{call.invoice_number}</td>
-                    <td style={{ padding: '0.75rem', color: colors.textSecondary }}>{call.phone_number}</td>
+                    <td style={{ padding: '0.75rem', color: colors.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={call.customer_name}>{call.customer_name}</td>
+                    <td style={{ padding: '0.75rem', color: colors.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={call.invoice_number}>{call.invoice_number}</td>
+                    <td style={{ padding: '0.75rem', color: colors.textSecondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={call.phone_number}>{call.phone_number}</td>
                     <td style={{ padding: '0.75rem' }}>
                       <span style={{
                         padding: '0.25rem 0.75rem',
@@ -1002,7 +1163,7 @@ export default function HummingBirdMultiAgent() {
   );
 
   const renderTranscriptsTab = () => {
-    // Filter transcripts based on search query, outcome filter, and cut-off date
+    // Filter transcripts based on search query, outcome filter, cut-off date, and date filter
     const filteredTranscripts = transcripts.filter(transcript => {
       const searchLower = searchQuery.toLowerCase();
       const matchesSearch = (
@@ -1023,7 +1184,10 @@ export default function HummingBirdMultiAgent() {
         matchesCutOffDate = transcript.cut_off_date === cutOffDateFilter;
       }
       
-      return matchesSearch && matchesOutcome && matchesCutOffDate;
+      // Date filter based on created_at timestamp
+      const matchesDateFilter = filterByDate(transcript.created_at);
+      
+      return matchesSearch && matchesOutcome && matchesCutOffDate && matchesDateFilter;
     });
 
     const handleTranscriptClick = async (transcript) => {
@@ -1067,11 +1231,211 @@ export default function HummingBirdMultiAgent() {
           padding: '2rem',
           border: `1px solid ${colors.borderLight}`
         }}>
+          {/* Filters Section */}
+          <div style={{ 
+            marginBottom: '1.5rem', 
+            padding: '1rem', 
+            background: colors.backgroundSecondary, 
+            borderRadius: '6px',
+            border: `1px solid ${colors.borderLight}`
+          }}>
+            {/* Row 1: Date Filter */}
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: colors.textSecondary }}>Date Range</label>
+                <select
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  style={{
+                    padding: '0.5rem',
+                    border: `1px solid ${colors.borderLight}`,
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    cursor: 'pointer',
+                    background: colors.background
+                  }}
+                >
+                  <option value="all">All Time</option>
+                  <option value="today">Today</option>
+                  <option value="yesterday">Yesterday</option>
+                  <option value="last7days">Last 7 Days</option>
+                  <option value="last30days">Last 30 Days</option>
+                  <option value="custom">Custom Range</option>
+                </select>
+              </div>
+              
+              {/* Custom Date Range Pickers */}
+              {dateFilter === 'custom' && (
+                <>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: '600', color: colors.textSecondary }}>Start Date</label>
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      style={{
+                        padding: '0.5rem',
+                        border: `1px solid ${colors.borderLight}`,
+                        borderRadius: '6px',
+                        fontSize: '0.875rem',
+                        outline: 'none',
+                        background: colors.background
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: '600', color: colors.textSecondary }}>End Date</label>
+                    <input
+                      type="date"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      style={{
+                        padding: '0.5rem',
+                        border: `1px solid ${colors.borderLight}`,
+                        borderRadius: '6px',
+                        fontSize: '0.875rem',
+                        outline: 'none',
+                        background: colors.background
+                      }}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Row 2: Search Bar */}
+            <div style={{ marginBottom: '1rem', position: 'relative' }}>
+              <Search size={18} style={{
+                position: 'absolute',
+                left: '0.75rem',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: colors.textSecondary
+              }} />
+              <input
+                type="text"
+                placeholder="Search by customer name, invoice number, phone, or status..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem 0.75rem 0.75rem 2.5rem',
+                  border: `1px solid ${colors.borderLight}`,
+                  borderRadius: '6px',
+                  fontSize: '0.875rem',
+                  outline: 'none',
+                  background: colors.background
+                }}
+              />
+              {searchQuery && (
+                <p style={{ fontSize: '0.75rem', color: colors.textSecondary, marginTop: '0.5rem' }}>
+                  Found {filteredTranscripts.length} result(s)
+                </p>
+              )}
+            </div>
+
+            {/* Row 3: Call Outcome and Cut-off Date */}
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: '1', minWidth: '200px' }}>
+                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: colors.textSecondary }}>Call Outcome</label>
+                <select
+                  value={outcomeFilter}
+                  onChange={(e) => {
+                    setOutcomeFilter(e.target.value);
+                    if (e.target.value !== 'CUT_OFF_DATE_PROVIDED') {
+                      setCutOffDateFilter('');
+                    }
+                  }}
+                  style={{
+                    padding: '0.5rem',
+                    border: `1px solid ${colors.borderLight}`,
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                    outline: 'none',
+                    cursor: 'pointer',
+                    background: colors.background
+                  }}
+                >
+                  <option value="all">All Outcomes</option>
+                  <option value="CUT_OFF_DATE_PROVIDED">Cut-off Date Provided</option>
+                  <option value="LEDGER_NEEDED">Ledger Needed</option>
+                  <option value="INVOICE_DETAILS_NEEDED">Invoice Details Needed</option>
+                  <option value="HUMAN_AGENT_NEEDED">Human Agent Needed</option>
+                  <option value="ALREADY_PAID">Already Paid</option>
+                  <option value="NO_COMMITMENT">No Commitment</option>
+                  <option value="FAILED">Failed</option>
+                </select>
+              </div>
+
+              {/* Cut-off Date Filter - Only shows when CUT_OFF_DATE_PROVIDED is selected */}
+              {outcomeFilter === 'CUT_OFF_DATE_PROVIDED' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: '1', minWidth: '200px' }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '600', color: colors.textSecondary }}>Cut-off Date (Optional)</label>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <input
+                      type="date"
+                      value={cutOffDateFilter}
+                      onChange={(e) => setCutOffDateFilter(e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: '0.5rem',
+                        border: `1px solid ${colors.borderLight}`,
+                        borderRadius: '6px',
+                        fontSize: '0.875rem',
+                        outline: 'none',
+                        background: colors.background,
+                        cursor: 'pointer'
+                      }}
+                    />
+                    {cutOffDateFilter && (
+                      <button
+                        onClick={() => setCutOffDateFilter('')}
+                        style={{
+                          padding: '0.5rem',
+                          background: colors.background,
+                          color: colors.text,
+                          border: `1px solid ${colors.borderLight}`,
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '0.875rem',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Header with Title and Actions */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <h3 style={{ fontSize: '1.125rem', fontWeight: '600', color: colors.text }}>
               Transcripts
             </h3>
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+              <button
+                onClick={fetchTranscripts}
+                style={{
+                  padding: '0.5rem 1rem',
+                  background: colors.background,
+                  color: colors.text,
+                  border: `1px solid ${colors.borderLight}`,
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                <RefreshCw size={14} />
+                Refresh
+              </button>
               <button
                 onClick={async () => {
                   try {
@@ -1109,147 +1473,8 @@ export default function HummingBirdMultiAgent() {
                 <Upload size={14} />
                 Export CSV
               </button>
-              <button
-                onClick={fetchTranscripts}
-                style={{
-                  padding: '0.5rem 1rem',
-                  background: colors.primary,
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                <RefreshCw size={14} />
-                Refresh
-              </button>
             </div>
           </div>
-
-          {/* Search Bar */}
-          <div style={{ marginBottom: '1.5rem', position: 'relative' }}>
-            <div style={{ position: 'relative' }}>
-              <Search size={18} style={{
-                position: 'absolute',
-                left: '0.75rem',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: colors.textSecondary
-              }} />
-              <input
-                type="text"
-                placeholder="Search by customer name, invoice number, phone, or status..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem 0.75rem 0.75rem 2.5rem',
-                  border: `1px solid ${colors.borderLight}`,
-                  borderRadius: '6px',
-                  fontSize: '0.9375rem',
-                  outline: 'none',
-                  transition: 'border-color 0.2s'
-                }}
-                onFocus={(e) => e.target.style.borderColor = colors.primary}
-                onBlur={(e) => e.target.style.borderColor = colors.borderLight}
-              />
-            </div>
-            {searchQuery && (
-              <p style={{ fontSize: '0.8125rem', color: colors.textSecondary, marginTop: '0.5rem' }}>
-                Found {filteredTranscripts.length} result(s)
-              </p>
-            )}
-          </div>
-
-          {/* Call Outcome Filter */}
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '600', color: colors.text }}>
-              Filter by Call Outcome
-            </label>
-            <select
-              value={outcomeFilter}
-              onChange={(e) => {
-                setOutcomeFilter(e.target.value);
-                // Clear date filter when outcome changes away from CUT_OFF_DATE_PROVIDED
-                if (e.target.value !== 'CUT_OFF_DATE_PROVIDED') {
-                  setCutOffDateFilter('');
-                }
-              }}
-              style={{
-                width: '100%',
-                padding: '0.75rem',
-                border: `1px solid ${colors.borderLight}`,
-                borderRadius: '6px',
-                fontSize: '0.9375rem',
-                outline: 'none',
-                cursor: 'pointer',
-                background: colors.background,
-                color: colors.text
-              }}
-              onFocus={(e) => e.target.style.borderColor = colors.primary}
-              onBlur={(e) => e.target.style.borderColor = colors.borderLight}
-            >
-              <option value="all">All Outcomes</option>
-              <option value="CUT_OFF_DATE_PROVIDED">Cut-off Date Provided</option>
-              <option value="LEDGER_NEEDED">Ledger Needed</option>
-              <option value="INVOICE_DETAILS_NEEDED">Invoice Details Needed</option>
-              <option value="HUMAN_AGENT_NEEDED">Human Agent Needed</option>
-              <option value="ALREADY_PAID">Already Paid</option>
-              <option value="NO_COMMITMENT">No Commitment</option>
-              <option value="FAILED">Failed</option>
-            </select>
-          </div>
-
-          {/* Cut-off Date Filter - Only shows when CUT_OFF_DATE_PROVIDED is selected */}
-          {outcomeFilter === 'CUT_OFF_DATE_PROVIDED' && (
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '600', color: colors.text }}>
-                Filter by Cut-off Date (Optional)
-              </label>
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                <input
-                  type="date"
-                  value={cutOffDateFilter}
-                  onChange={(e) => setCutOffDateFilter(e.target.value)}
-                  style={{
-                    flex: 1,
-                    padding: '0.75rem',
-                    border: `1px solid ${colors.borderLight}`,
-                    borderRadius: '6px',
-                    fontSize: '0.9375rem',
-                    outline: 'none',
-                    background: colors.background,
-                    color: colors.text,
-                    cursor: 'pointer'
-                  }}
-                  onFocus={(e) => e.target.style.borderColor = colors.primary}
-                  onBlur={(e) => e.target.style.borderColor = colors.borderLight}
-                />
-                {cutOffDateFilter && (
-                  <button
-                    onClick={() => setCutOffDateFilter('')}
-                    style={{
-                      padding: '0.75rem 1rem',
-                      background: colors.backgroundSecondary,
-                      color: colors.text,
-                      border: `1px solid ${colors.borderLight}`,
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontSize: '0.875rem',
-                      fontWeight: '500',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    Clear Date
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
 
           {filteredTranscripts.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

@@ -282,27 +282,93 @@ async def reset_user_password(user_id: int, request: ChangePasswordRequest, curr
 async def export_call_status(status: str = "all", current_user = Depends(get_current_user)):
     """
     Export call data filtered by status
-    Returns CSV with: customer data + call status + created_at
+    Returns CSV with: customer data + call status + created_at + call_outcomes + cutoff_date
     """
     try:
         import io
         import csv
+        from pathlib import Path
         
-        # Get data from database
-        data = db.get_export_data_by_status(
-            status_filter=status if status != "all" else None,
-            user_id=current_user["user_id"]
-        )
+        # Get data from database (same as transcripts export)
+        data = db.get_export_data_with_transcripts(user_id=current_user["user_id"])
         
         if not data:
             raise HTTPException(status_code=404, detail="No data found for export")
+        
+        # Filter by status if specified
+        if status != "all":
+            data = [record for record in data if record["call_status"] == status]
+        
+        # Enrich with call outcomes from transcript files (same logic as transcripts export)
+        transcript_base_dir = Path(f"transcripts/user_{current_user['user_id']}")
+        
+        for record in data:
+            call_uuid = record["call_uuid"]
+            invoice_number = record["invoice_number"]
+            
+            # Find transcript file
+            transcript_file = None
+            if transcript_base_dir.exists():
+                # Look for transcript file matching invoice_number and call_uuid
+                for file in transcript_base_dir.glob(f"{invoice_number}_*.txt"):
+                    if call_uuid in file.stem:
+                        transcript_file = file
+                        break
+            
+            # Extract call outcomes and cutoff date from transcript
+            call_outcomes = "N/A"
+            cutoff_date = ""
+            if transcript_file and transcript_file.exists():
+                try:
+                    with open(transcript_file, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    
+                    # Extract outcomes from summary
+                    if "**CALL OUTCOMES:**" in content:
+                        start = content.index("**CALL OUTCOMES:**") + len("**CALL OUTCOMES:**")
+                        # Find end of outcomes section (before numbered list)
+                        end = content.find("\n\n", start)
+                        if end == -1:
+                            end = content.find("1.", start)
+                        if end == -1:
+                            end = len(content)
+                        
+                        outcomes_text = content[start:end].strip()
+                        # Extract just the outcome names (remove "- " and details after ":")
+                        outcomes = []
+                        for line in outcomes_text.split('\n'):
+                            line = line.strip()
+                            if line.startswith('- '):
+                                outcome = line[2:].split(':')[0].strip()
+                                if outcome:
+                                    outcomes.append(outcome)
+                                
+                                # Extract cutoff date if outcome is CUT_OFF_DATE_PROVIDED
+                                if outcome == "CUT_OFF_DATE_PROVIDED" and ':' in line:
+                                    date_text = line.split(':', 1)[1].strip()
+                                    # Try to parse the date
+                                    try:
+                                        from dateutil import parser as date_parser
+                                        parsed_date = date_parser.parse(date_text, fuzzy=True)
+                                        cutoff_date = parsed_date.strftime("%Y-%m-%d")
+                                    except:
+                                        cutoff_date = date_text  # Use raw text if parsing fails
+                        
+                        call_outcomes = ", ".join(outcomes) if outcomes else "N/A"
+                except Exception as e:
+                    logger.warning(f"Error reading transcript for {call_uuid}: {e}")
+            
+            record["call_outcomes"] = call_outcomes
+            record["cutoff_date"] = cutoff_date
+            # Remove call_uuid from export
+            del record["call_uuid"]
         
         # Create CSV in memory
         output = io.StringIO()
         writer = csv.DictWriter(output, fieldnames=[
             "customer_name", "phone_number", "whatsapp_number", "email",
             "invoice_number", "invoice_date", "total_amount", "outstanding_balance",
-            "call_status", "created_at"
+            "call_status", "created_at", "call_outcomes", "cutoff_date"
         ])
         
         writer.writeheader()
