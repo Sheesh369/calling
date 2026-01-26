@@ -33,7 +33,6 @@ from pipecat.transports.websocket.fastapi import (
 )
 from openai import OpenAI
 import httpx
-from dateutil import parser as date_parser
 
 load_dotenv(override=True)
 
@@ -253,105 +252,45 @@ async def generate_call_summary(transcript_file: str):
         with open(transcript_file, "r", encoding="utf-8") as f:
             content = f.read()
         
-        # Extract invoice date from metadata (for validation later)
-        invoice_date = None
-        if "Invoice Date:" in content:
-            try:
-                start = content.index("Invoice Date:") + len("Invoice Date:")
-                end = content.index("\n", start)
-                invoice_date = content[start:end].strip()
-                logger.info(f"Extracted invoice date from transcript: {invoice_date}")
-            except:
-                pass
-        
         # Extract conversation part (between CONVERSATION markers)
         conversation_start = content.find("CONVERSATION:")
         if conversation_start == -1:
             logger.warning(f"No conversation found in transcript: {transcript_file}")
             return
         
-        # Extract ONLY the conversation content (USER/ASSISTANT messages)
-        # Skip the metadata section to avoid sending customer PII to OpenAI
-        conversation_section = content[conversation_start:]
-        
-        # Further extract only USER/ASSISTANT lines (no metadata)
-        conversation_lines = []
-        for line in conversation_section.split('\n'):
-            # Only include lines that are actual conversation
-            # Format: [timestamp] USER: text or [timestamp] ASSISTANT: text
-            if 'USER:' in line or 'ASSISTANT:' in line:
-                # Remove timestamp and keep only the speaker and message
-                if '] USER:' in line:
-                    conversation_lines.append('USER:' + line.split('] USER:')[1])
-                elif '] ASSISTANT:' in line:
-                    conversation_lines.append('ASSISTANT:' + line.split('] ASSISTANT:')[1])
-        
-        conversation_content = '\n'.join(conversation_lines)
-        
-        # PRE-VALIDATION: Check if conversation is meaningful (language-agnostic)
-        # A meaningful conversation has either:
-        # - At least 3 messages OR
-        # - At least one message with 15+ characters
-        is_meaningful = False
-        if len(conversation_lines) >= 3:
-            is_meaningful = True
-        else:
-            for line in conversation_lines:
-                # Extract just the message content (after "USER:" or "ASSISTANT:")
-                if 'USER:' in line:
-                    message = line.split('USER:', 1)[1].strip()
-                elif 'ASSISTANT:' in line:
-                    message = line.split('ASSISTANT:', 1)[1].strip()
-                else:
-                    continue
-                
-                if len(message) >= 15:
-                    is_meaningful = True
-                    break
+        conversation_content = content[conversation_start:]
         
         # Check for actual USER/ASSISTANT conversation messages
+        conversation_lines = [line for line in conversation_content.split('\n') 
+                             if 'USER:' in line or 'ASSISTANT:' in line]
+        
         if len(conversation_lines) == 0:  # No actual conversation
             logger.warning(f"Empty conversation in transcript: {transcript_file}")
-            summary_text = "**CALL OUTCOMES:**\n- FAILED\n\nNo conversation recorded - call failed or customer did not answer."
-        elif not is_meaningful:
-            # Not a meaningful conversation - skip AI processing
-            logger.warning(f"Non-meaningful conversation in transcript: {transcript_file} (too short or no substantial messages)")
-            summary_text = "**CALL OUTCOMES:**\n- NO_COMMITMENT\n\nConversation was too brief or did not contain meaningful dialogue."
+            summary_text = "**CALL OUTCOME:** FAILED\n\nNo conversation recorded - call failed or customer did not answer."
         else:
             # Create enhanced prompt for OpenAI with call outcome classification
             prompt = f"""Analyze this customer service call about payment reminder.
 
-CRITICAL INSTRUCTIONS:
-- ONLY report what ACTUALLY happened in this conversation
-- Do NOT make assumptions about what was said before or after
-- If the customer did not explicitly commit to a payment date, mark as NO_COMMITMENT
-- Be precise and factual
-
 {conversation_content}
 
-Determine ALL APPLICABLE CALL OUTCOMES (there may be multiple):
-- CUT_OFF_DATE_PROVIDED: Customer committed to pay by a specific date
+First, determine the PRIMARY CALL OUTCOME:
+- CUT_OFF_DATE_PROVIDED: Customer committed to pay (check if payment commitment was made)
 - INVOICE_DETAILS_NEEDED: Customer requested invoice copy/details/resend
 - LEDGER_NEEDED: Customer requested ledger/statement/account details
 - HUMAN_AGENT_NEEDED: Customer requested to speak with human agent/manager
 - ALREADY_PAID: Customer claims payment was already made
 - NO_COMMITMENT: Customer refused or didn't commit to payment
 
-IMPORTANT: A call can have MULTIPLE outcomes. For example, a customer might request a ledger AND commit to a payment date.
-
 Then provide your normal summary with these 5 points:
 1. Whether the customer was reached and verified
 2. Customer's response to the payment reminder
-3. Any commitments or next steps discussed (if customer mentioned a date, that's the PAYMENT CUT-OFF DATE)
+3. Any commitments or next steps discussed
 4. Overall outcome of the call
 5. Language used in the conversation (if multiple languages, mention the switch)
 
 Format your response EXACTLY like this:
 
-**CALL OUTCOMES:**
-- [outcome category 1]: [brief detail if applicable]
-- [outcome category 2]: [brief detail if applicable]
-(list all applicable outcomes)
+**CALL OUTCOME:** [outcome category]
 
 1. **Customer Verified**: ...
 2. **Customer Response**: ...
@@ -362,143 +301,14 @@ Format your response EXACTLY like this:
 Keep the summary brief and professional."""
 
             # Call OpenAI API
-            client = OpenAI(
-                api_key=os.getenv("OPENAI_API_KEY")
-            )
-            response = client.chat.completions.create(
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            response = client.responses.create(
                 model="gpt-4o",
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
+                input=prompt
             )
             
-            summary_text = response.choices[0].message.content
+            summary_text = response.output_text
             logger.info(f"Summary generated successfully for {transcript_file}")
-            
-            # POST-AI VALIDATION: Ensure CUT_OFF_DATE_PROVIDED has a valid date
-            if "CUT_OFF_DATE_PROVIDED" in summary_text:
-                logger.info("Validating that CUT_OFF_DATE_PROVIDED has an extractable date...")
-                
-                # Try to extract date from CUT_OFF_DATE_PROVIDED line
-                cutoff_date_found = False
-                if "CUT_OFF_DATE_PROVIDED:" in summary_text or "- CUT_OFF_DATE_PROVIDED:" in summary_text:
-                    try:
-                        # Find the CUT_OFF_DATE_PROVIDED line
-                        if "- CUT_OFF_DATE_PROVIDED:" in summary_text:
-                            cutoff_line_start = summary_text.index("- CUT_OFF_DATE_PROVIDED:")
-                        else:
-                            cutoff_line_start = summary_text.index("CUT_OFF_DATE_PROVIDED:")
-                        
-                        cutoff_line_end = summary_text.index("\n", cutoff_line_start) if "\n" in summary_text[cutoff_line_start:] else len(summary_text)
-                        cutoff_line = summary_text[cutoff_line_start:cutoff_line_end]
-                        
-                        # Extract text after the colon
-                        if ":" in cutoff_line:
-                            date_text = cutoff_line.split(":", 1)[1].strip()
-                            
-                            # Try to parse with python-dateutil
-                            try:
-                                parsed_date = date_parser.parse(date_text, fuzzy=True)
-                                cutoff_date_found = True
-                                logger.info(f"Successfully extracted cutoff date: {parsed_date.strftime('%Y-%m-%d')}")
-                            except:
-                                logger.warning(f"Could not parse date from: {date_text}")
-                    except Exception as e:
-                        logger.warning(f"Error extracting date from CUT_OFF_DATE_PROVIDED line: {e}")
-                
-                # If no valid date found, remove CUT_OFF_DATE_PROVIDED and add NO_COMMITMENT
-                if not cutoff_date_found:
-                    logger.warning("CUT_OFF_DATE_PROVIDED found but no valid date extracted. Correcting summary...")
-                    
-                    # Remove CUT_OFF_DATE_PROVIDED outcome
-                    summary_lines = summary_text.split('\n')
-                    corrected_lines = []
-                    
-                    for line in summary_lines:
-                        if "CUT_OFF_DATE_PROVIDED" in line:
-                            continue
-                        corrected_lines.append(line)
-                    
-                    # Add NO_COMMITMENT if not already present
-                    if "NO_COMMITMENT" not in summary_text:
-                        # Find the CALL OUTCOMES section and add NO_COMMITMENT
-                        for i, line in enumerate(corrected_lines):
-                            if "**CALL OUTCOMES:**" in line:
-                                corrected_lines.insert(i + 1, "- NO_COMMITMENT: No valid payment date could be extracted")
-                                break
-                    
-                    summary_text = '\n'.join(corrected_lines)
-                    logger.info("Summary corrected: CUT_OFF_DATE_PROVIDED removed, NO_COMMITMENT added")
-            
-            # VALIDATION: Check if cut-off date == invoice date
-            if invoice_date and "CUT_OFF_DATE_PROVIDED" in summary_text:
-                logger.info("Validating cut-off date against invoice date...")
-                
-                # Normalize invoice date using python-dateutil
-                invoice_date_normalized = None
-                try:
-                    invoice_date_normalized = date_parser.parse(invoice_date, fuzzy=True).date()
-                    logger.info(f"Parsed invoice date: {invoice_date_normalized}")
-                except Exception as e:
-                    logger.warning(f"Could not parse invoice date '{invoice_date}': {e}")
-                
-                # Extract cut-off date from summary (look in CUT_OFF_DATE_PROVIDED line)
-                cutoff_date_normalized = None
-                if "CUT_OFF_DATE_PROVIDED:" in summary_text or "- CUT_OFF_DATE_PROVIDED:" in summary_text:
-                    try:
-                        # Find the CUT_OFF_DATE_PROVIDED line
-                        if "- CUT_OFF_DATE_PROVIDED:" in summary_text:
-                            cutoff_line_start = summary_text.index("- CUT_OFF_DATE_PROVIDED:")
-                        else:
-                            cutoff_line_start = summary_text.index("CUT_OFF_DATE_PROVIDED:")
-                        
-                        cutoff_line_end = summary_text.index("\n", cutoff_line_start) if "\n" in summary_text[cutoff_line_start:] else len(summary_text)
-                        cutoff_line = summary_text[cutoff_line_start:cutoff_line_end]
-                        
-                        # Extract text after the colon
-                        if ":" in cutoff_line:
-                            date_text = cutoff_line.split(":", 1)[1].strip()
-                            
-                            # Parse with python-dateutil
-                            try:
-                                cutoff_date_normalized = date_parser.parse(date_text, fuzzy=True).date()
-                                logger.info(f"Parsed cutoff date: {cutoff_date_normalized}")
-                            except Exception as e:
-                                logger.warning(f"Could not parse cutoff date from '{date_text}': {e}")
-                    except Exception as e:
-                        logger.warning(f"Error extracting cutoff date: {e}")
-                
-                # Compare dates
-                if invoice_date_normalized and cutoff_date_normalized:
-                    logger.info(f"Invoice date: {invoice_date_normalized}, Cut-off date: {cutoff_date_normalized}")
-                    
-                    if invoice_date_normalized == cutoff_date_normalized:
-                        logger.warning("Cut-off date matches invoice date! Correcting summary...")
-                        
-                        # Remove CUT_OFF_DATE_PROVIDED outcome
-                        summary_lines = summary_text.split('\n')
-                        corrected_lines = []
-                        skip_next = False
-                        
-                        for line in summary_lines:
-                            if "CUT_OFF_DATE_PROVIDED" in line:
-                                skip_next = True
-                                continue
-                            if skip_next and line.strip().startswith('-'):
-                                skip_next = False
-                                continue
-                            corrected_lines.append(line)
-                        
-                        # Add NO_COMMITMENT if not already present
-                        if "NO_COMMITMENT" not in summary_text:
-                            # Find the CALL OUTCOMES section and add NO_COMMITMENT
-                            for i, line in enumerate(corrected_lines):
-                                if "**CALL OUTCOMES:**" in line:
-                                    corrected_lines.insert(i + 1, "- NO_COMMITMENT: Customer mentioned invoice date instead of commitment date")
-                                    break
-                        
-                        summary_text = '\n'.join(corrected_lines)
-                        logger.info("Summary corrected: CUT_OFF_DATE_PROVIDED removed, NO_COMMITMENT added")
         
         # Append summary to transcript file
         with open(transcript_file, "a", encoding="utf-8") as f:
@@ -527,24 +337,16 @@ Keep the summary brief and professional."""
 async def run_bot(transport: BaseTransport, handle_sigint: bool, custom_data: dict = None, call_uuid: str = None, call_data: dict = None):
     global current_transcript_file
     
-    # Get user_id from custom_data (for organizing transcripts by user)
-    user_id = custom_data.get("user_id", "unknown") if custom_data else "unknown"
-    
-    # Create user-specific transcripts directory
-    transcripts_dir = Path(f"transcripts/user_{user_id}")
-    transcripts_dir.mkdir(parents=True, exist_ok=True)
+    # Create transcripts directory if it doesn't exist
+    transcripts_dir = Path("transcripts")
+    transcripts_dir.mkdir(exist_ok=True)
     
     # Get invoice number from custom data (fallback to "unknown" if not provided)
     invoice_number = custom_data.get("invoice_number", "unknown") if custom_data else "unknown"
-    
-    # Sanitize invoice number - replace invalid filename characters
-    # Replace / \ : * ? " < > | with underscore to prevent directory creation
-    safe_invoice_number = invoice_number.replace("/", "_").replace("\\", "_").replace(":", "_").replace("*", "_").replace("?", "_").replace('"', "_").replace("<", "_").replace(">", "_").replace("|", "_")
-    
     call_id = call_uuid or "unknown"
     
     # Create transcript filename: invoiceid_call_uuid.txt
-    transcript_filename = transcripts_dir / f"{safe_invoice_number}_{call_id}.txt"
+    transcript_filename = transcripts_dir / f"{invoice_number}_{call_id}.txt"
     current_transcript_file = str(transcript_filename)
     
     logger.info(f"Transcript will be saved to: {current_transcript_file}")
@@ -573,42 +375,42 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool, custom_data: di
     tamil_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="amit",
+        voice_id="anushka",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.TA)
     )
 
     english_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="amit",
+        voice_id="anushka",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.EN)
     )
 
     hindi_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="amit",
+        voice_id="anushka",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.HI)
     )
 
     telugu_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="amit",
+        voice_id="anushka",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.TE)
     )
 
     malayalam_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="amit",
+        voice_id="anushka",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.ML)
     )
 
     kannada_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="amit",
+        voice_id="anushka",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.KN)
     )
 
@@ -646,7 +448,7 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool, custom_data: di
 
     # Add custom data to system prompt if available
     if custom_data:
-        logger.info(f"Custom data received for call (customer info redacted for security)")
+        logger.info(f"Custom data received: {json.dumps(custom_data, indent=2)}")
         system_content += "CUSTOM CALL DATA:\n"
         system_content += json.dumps(custom_data, indent=2)
         system_content += "\n\nUse this custom data to personalize the conversation. Reference the customer name, invoice details, and amounts naturally during the call.\n\n"
@@ -675,19 +477,26 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool, custom_data: di
         )
 
     system_content += (
-        "CRITICAL CONFIRMATION RULES: "
-        "- When customer gives a payment date, DO NOT ask for confirmation "
-        "- Immediately respond: 'We'll expect the payment on [date]. Have a great day!' "
-        "- NO reconfirmation questions like 'correct?' or 'is that right?' "
-        "\n\n"
-        "Your task: Ask when payment can be made. When they give a date, immediately say: 'We'll expect the payment on [date]. Have a great day!' and end the call. "
+        "Your task is to continue the payment reminder call with the following approach: "
+        "1. Verify you're speaking with the right person/company "
+        "2. Politely mention the overdue invoice details "
+        "3. Ask about the payment status and when they plan to make the payment "
+        "4. Offer to help with any questions or concerns about the invoice "
+        "5. Thank them for their time and cooperation "
         "\n\n"
         "HUMAN AGENT ESCALATION: "
         "If the customer requests to speak with a human agent, manager, supervisor, or real person, respond with: "
-        "'I understand. I'll have our team call you back shortly. Thanks, Have a great day.' "
+        "'I understand. I'll have our team call you back shortly. Thank you for your time. Have a great day.' "
         "Then the call will end automatically. "
         "\n\n"
-        "Be brief and direct. Get the payment date and end the call. Stay in English unless explicitly asked to change. Never mix languages. Always write numbers as words for TTS."
+        "CRITICAL DATE HANDLING (NEW): "
+        "When customer mentions a payment date (tomorrow, next week, Monday, etc.), calculate the actual date using today's date above. "
+        "Always confirm with the specific date in words for TTS. "
+        "Example: 'tomorrow' → 'Just to confirm, you'll be paying on January sixth, two thousand twenty-six, correct?' "
+        "\n\n"
+        "Maintain a friendly, professional, and understanding tone throughout the conversation. "
+        "Be patient and helpful, not aggressive or demanding. "
+        "Remember: Stay in English unless explicitly asked to change. Never mix languages. Use colloquial spoken language, not formal literary language. Always write numbers as words for TTS."
     )
 
     messages = [
@@ -802,7 +611,7 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool, custom_data: di
         logger.info("Starting multilingual call conversation")
         logger.info("Supported languages: Tamil, English, Hindi, Telugu, Malayalam, Kannada")
         if custom_data:
-            logger.info(f"Call initiated with custom data (customer info redacted for security)")
+            logger.info(f"Call initiated with custom data: {json.dumps(custom_data, indent=2)}")
         if call_uuid:
             logger.info(f"Call UUID: {call_uuid}")
         
@@ -869,9 +678,9 @@ async def bot(runner_args):
     call_uuid = getattr(runner_args.websocket.state, 'call_uuid', None)
     
     # Log what we received
-    print(f"Bot received custom_data (customer info redacted for security)")
+    print(f"Bot received custom_data: {custom_data}")
     print(f"Bot received call_uuid: {call_uuid}")
-    logger.info(f"Bot received custom_data (customer info redacted for security)")
+    logger.info(f"Bot received custom_data: {custom_data}")
     logger.info(f"Bot received call_uuid: {call_uuid}")
     
     transport_type, call_data = await parse_telephony_websocket(runner_args.websocket)

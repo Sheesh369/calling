@@ -371,7 +371,7 @@ async def generate_greeting_audio(text: str, call_uuid: str) -> str:
         payload = {
             "inputs": [text],
             "target_language_code": "en-IN",
-            "speaker": "anushka",  # Female voice - matches the bot's voice
+            "speaker": "amit",  # Male voice - matches the bot's voice
             "pitch": 0,
             "pace": 1.0,
             "loudness": 1.5,
@@ -427,20 +427,8 @@ async def process_single_call(call_data: dict) -> dict:
         invoice_date = custom_data.get("invoice_date", "")
         
         # Build personalized greeting text
-        if invoice_number.lower() == "unknown":
-            greeting_text = f"Hi{' ' + customer_name if customer_name else ''}, this is Sara from Hummingbird, calling regarding your outstanding invoice."
-        else:
-            spoken_invoice = invoice_number.replace("-", "").replace("/", "")
-            greeting_text = f"Hi{' ' + customer_name if customer_name else ''}, this is Sara from Hummingbird, calling regarding an outstanding invoice {spoken_invoice}"
-            
-            if outstanding_balance:
-                balance_in_words = number_to_words(outstanding_balance)
-                greeting_text += f" for rupees {balance_in_words}"
-            
-            if invoice_date:
-                greeting_text += f", which was dated on {invoice_date}"
-            
-            greeting_text += ". I wanted to check on the status of this payment."
+        balance_in_words = number_to_words(outstanding_balance) if outstanding_balance else "unknown"
+        greeting_text = f"Hi, this is Farooq from Hummingbird's commercial team. I'm calling regarding the TAC due of rupees {balance_in_words} for the invoice dated {invoice_date}. When can we expect the payment?"
         
         logger.info(f"Greeting text: {greeting_text}")
         
@@ -572,7 +560,7 @@ async def process_call_queue():
         payload = {
             "inputs": [text],
             "target_language_code": "en-IN",
-            "speaker": "anushka",  # Female voice - matches the bot's voice
+            "speaker": "amit",  # Male voice - matches the bot's voice
             "pitch": 0,
             "pace": 1.0,
             "loudness": 1.5,
@@ -697,24 +685,8 @@ async def start_call(request: Request, current_user = Depends(get_current_user))
         invoice_date = custom_data.get("invoice_date", "")
         
         # Build personalized greeting text
-        if invoice_number.lower() == "unknown":
-            greeting_text = f"Hi{' ' + customer_name if customer_name else ''}, this is Sara from Hummingbird, calling regarding your outstanding invoice."
-        else:
-            # Remove special characters for TTS
-            spoken_invoice = invoice_number.replace("-", "").replace("/", "")
-            
-            # Build greeting with available information
-            greeting_text = f"Hi{' ' + customer_name if customer_name else ''}, this is Sara from Hummingbird, calling regarding an outstanding invoice {spoken_invoice}"
-            
-            if outstanding_balance:
-                # Convert balance to words for TTS
-                balance_in_words = number_to_words(outstanding_balance)
-                greeting_text += f" for rupees {balance_in_words}"
-            
-            if invoice_date:
-                greeting_text += f", which was dated on {invoice_date}"
-            
-            greeting_text += ". I wanted to check on the status of this payment."
+        balance_in_words = number_to_words(outstanding_balance) if outstanding_balance else "unknown"
+        greeting_text = f"Hi, this is Farooq from Hummingbird's commercial team. I'm calling regarding the TAC due of rupees {balance_in_words} for the invoice dated {invoice_date}. When can we expect the payment?"
         
         logger.info(f"Greeting text: {greeting_text}")
         
