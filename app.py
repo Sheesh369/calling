@@ -296,9 +296,35 @@ if agent_type == "📞 Voice Agent":
     with tab2:
         st.subheader("Real-time Call Status")
         
-        col1, col2 = st.columns([3, 1])
+        col1, col2, col3 = st.columns([2, 1, 1])
         with col2:
             auto_refresh = st.checkbox("Auto-refresh (3s)", value=False, key="voice_refresh")
+        with col3:
+            # Export button with status filter
+            status_filter = st.selectbox(
+                "Filter by status",
+                ["all", "completed", "failed", "calling", "in_progress", "initiated"],
+                key="export_status_filter"
+            )
+            if st.button("📥 Export CSV", key="export_call_status"):
+                try:
+                    response = requests.get(
+                        f"{API_BASE_URL}/api/export/call_status",
+                        params={"status": status_filter},
+                        headers={"Authorization": f"Bearer {st.session_state.token}"}
+                    )
+                    if response.status_code == 200:
+                        st.download_button(
+                            label="⬇️ Download CSV",
+                            data=response.content,
+                            file_name=f"call_status_{status_filter}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv"
+                        )
+                        st.success("Export ready! Click Download CSV button above.")
+                    else:
+                        st.error(f"Export failed: {response.text}")
+                except Exception as e:
+                    st.error(f"Error exporting: {e}")
         
         if st.button("🔄 Refresh Status", key="voice_refresh_btn") or auto_refresh:
             all_calls = get_all_calls_status()
@@ -335,6 +361,28 @@ if agent_type == "📞 Voice Agent":
     # Tab 3: Transcripts
     with tab3:
         st.subheader("Call Transcripts & Summaries")
+        
+        col1, col2 = st.columns([3, 1])
+        with col2:
+            # Export button for transcripts
+            if st.button("📥 Export Transcripts CSV", key="export_transcripts"):
+                try:
+                    response = requests.get(
+                        f"{API_BASE_URL}/api/export/transcripts",
+                        headers={"Authorization": f"Bearer {st.session_state.token}"}
+                    )
+                    if response.status_code == 200:
+                        st.download_button(
+                            label="⬇️ Download CSV",
+                            data=response.content,
+                            file_name=f"transcripts_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv"
+                        )
+                        st.success("Export ready! Click Download CSV button above.")
+                    else:
+                        st.error(f"Export failed: {response.text}")
+                except Exception as e:
+                    st.error(f"Error exporting: {e}")
         
         if st.button("🔄 Refresh Transcripts", key="voice_transcripts_refresh"):
             st.rerun()

@@ -51,6 +51,23 @@ class Database:
             )
         """)
         
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS customer_data (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                call_uuid TEXT NOT NULL,
+                customer_name TEXT,
+                phone_number TEXT,
+                whatsapp_number TEXT,
+                email TEXT,
+                invoice_number TEXT,
+                invoice_date TEXT,
+                total_amount TEXT,
+                outstanding_balance TEXT,
+                created_at TIMESTAMP NOT NULL,
+                FOREIGN KEY (call_uuid) REFERENCES calls (call_uuid)
+            )
+        """)
+        
         # Create default super admin if not exists
         cursor.execute("SELECT * FROM users WHERE username = 'admin'")
         if not cursor.fetchone():
@@ -333,3 +350,163 @@ class Database:
                 "plivo_call_uuid": row[11]
             }
         return None
+
+    # ============================================================================
+    # CUSTOMER DATA METHODS
+    # ============================================================================
+    
+    def insert_customer_data(self, call_uuid, customer_name, phone_number, whatsapp_number, 
+                            email, invoice_number, invoice_date, total_amount, outstanding_balance, created_at):
+        """Insert customer data from excel upload"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("""
+                INSERT INTO customer_data 
+                (call_uuid, customer_name, phone_number, whatsapp_number, email, 
+                 invoice_number, invoice_date, total_amount, outstanding_balance, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (call_uuid, customer_name, phone_number, whatsapp_number, email, 
+                  invoice_number, invoice_date, total_amount, outstanding_balance, created_at))
+            
+            conn.commit()
+            logger.info(f"Customer data inserted for call {call_uuid}")
+        except Exception as e:
+            logger.error(f"Error inserting customer data: {e}")
+        finally:
+            conn.close()
+    
+    def get_customer_data_by_call_uuid(self, call_uuid):
+        """Get customer data for a specific call"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM customer_data WHERE call_uuid = ?", (call_uuid,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return {
+                "id": row[0],
+                "call_uuid": row[1],
+                "customer_name": row[2],
+                "phone_number": row[3],
+                "whatsapp_number": row[4],
+                "email": row[5],
+                "invoice_number": row[6],
+                "invoice_date": row[7],
+                "total_amount": row[8],
+                "outstanding_balance": row[9],
+                "created_at": row[10]
+            }
+        return None
+    
+    def get_export_data_by_status(self, status_filter=None, user_id=None):
+        """Get combined data for call status export"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+            SELECT 
+                cd.customer_name,
+                cd.phone_number,
+                cd.whatsapp_number,
+                cd.email,
+                cd.invoice_number,
+                cd.invoice_date,
+                cd.total_amount,
+                cd.outstanding_balance,
+                c.status,
+                c.created_at
+            FROM customer_data cd
+            INNER JOIN calls c ON cd.call_uuid = c.call_uuid
+            WHERE 1=1
+        """
+        
+        params = []
+        
+        if user_id is not None:
+            query += " AND c.user_id = ?"
+            params.append(user_id)
+        
+        if status_filter and status_filter != "all":
+            query += " AND c.status = ?"
+            params.append(status_filter)
+        
+        query += " ORDER BY c.created_at DESC"
+        
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+        
+        results = []
+        for row in rows:
+            results.append({
+                "customer_name": row[0],
+                "phone_number": row[1],
+                "whatsapp_number": row[2],
+                "email": row[3],
+                "invoice_number": row[4],
+                "invoice_date": row[5],
+                "total_amount": row[6],
+                "outstanding_balance": row[7],
+                "call_status": row[8],
+                "created_at": row[9]
+            })
+        
+        return results
+
+    
+    def get_export_data_with_transcripts(self, user_id=None):
+        """Get combined data for transcript export (will be enriched with outcomes from files)"""
+        conn = self.get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+            SELECT 
+                cd.customer_name,
+                cd.phone_number,
+                cd.whatsapp_number,
+                cd.email,
+                cd.invoice_number,
+                cd.invoice_date,
+                cd.total_amount,
+                cd.outstanding_balance,
+                c.status,
+                c.created_at,
+                c.call_uuid
+            FROM customer_data cd
+            INNER JOIN calls c ON cd.call_uuid = c.call_uuid
+            WHERE 1=1
+        """
+        
+        params = []
+        
+        if user_id is not None:
+            query += " AND c.user_id = ?"
+            params.append(user_id)
+        
+        query += " ORDER BY c.created_at DESC"
+        
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        conn.close()
+        
+        results = []
+        for row in rows:
+            results.append({
+                "customer_name": row[0],
+                "phone_number": row[1],
+                "whatsapp_number": row[2],
+                "email": row[3],
+                "invoice_number": row[4],
+                "invoice_date": row[5],
+                "total_amount": row[6],
+                "outstanding_balance": row[7],
+                "call_status": row[8],
+                "created_at": row[9],
+                "call_uuid": row[10]
+            })
+        
+        return results

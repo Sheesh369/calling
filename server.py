@@ -274,6 +274,162 @@ async def reset_user_password(user_id: int, request: ChangePasswordRequest, curr
 # ============================================================================
 
 
+# ============================================================================
+# EXPORT ENDPOINTS
+# ============================================================================
+
+@app.get("/api/export/call_status")
+async def export_call_status(status: str = "all", current_user = Depends(get_current_user)):
+    """
+    Export call data filtered by status
+    Returns CSV with: customer data + call status + created_at
+    """
+    try:
+        import io
+        import csv
+        
+        # Get data from database
+        data = db.get_export_data_by_status(
+            status_filter=status if status != "all" else None,
+            user_id=current_user["user_id"]
+        )
+        
+        if not data:
+            raise HTTPException(status_code=404, detail="No data found for export")
+        
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=[
+            "customer_name", "phone_number", "whatsapp_number", "email",
+            "invoice_number", "invoice_date", "total_amount", "outstanding_balance",
+            "call_status", "created_at"
+        ])
+        
+        writer.writeheader()
+        writer.writerows(data)
+        
+        # Return as downloadable CSV
+        csv_content = output.getvalue()
+        output.close()
+        
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=call_status_export_{status}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            }
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting call status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/transcripts")
+async def export_transcripts(current_user = Depends(get_current_user)):
+    """
+    Export call data with transcript outcomes
+    Returns CSV with: customer data + call status + created_at + call_outcomes
+    """
+    try:
+        import io
+        import csv
+        from pathlib import Path
+        
+        # Get data from database
+        data = db.get_export_data_with_transcripts(user_id=current_user["user_id"])
+        
+        if not data:
+            raise HTTPException(status_code=404, detail="No data found for export")
+        
+        # Enrich with call outcomes from transcript files
+        transcript_base_dir = Path(f"transcripts/user_{current_user['user_id']}")
+        
+        for record in data:
+            call_uuid = record["call_uuid"]
+            invoice_number = record["invoice_number"]
+            
+            # Find transcript file
+            transcript_file = None
+            if transcript_base_dir.exists():
+                # Look for transcript file matching invoice_number and call_uuid
+                for file in transcript_base_dir.glob(f"{invoice_number}_*.txt"):
+                    if call_uuid in file.stem:
+                        transcript_file = file
+                        break
+            
+            # Extract call outcomes from transcript
+            call_outcomes = "N/A"
+            if transcript_file and transcript_file.exists():
+                try:
+                    with open(transcript_file, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    
+                    # Extract outcomes from summary
+                    if "**CALL OUTCOMES:**" in content:
+                        start = content.index("**CALL OUTCOMES:**") + len("**CALL OUTCOMES:**")
+                        # Find end of outcomes section (before numbered list)
+                        end = content.find("\n\n", start)
+                        if end == -1:
+                            end = content.find("1.", start)
+                        if end == -1:
+                            end = len(content)
+                        
+                        outcomes_text = content[start:end].strip()
+                        # Extract just the outcome names (remove "- " and details after ":")
+                        outcomes = []
+                        for line in outcomes_text.split('\n'):
+                            line = line.strip()
+                            if line.startswith('- '):
+                                outcome = line[2:].split(':')[0].strip()
+                                if outcome:
+                                    outcomes.append(outcome)
+                        
+                        call_outcomes = ", ".join(outcomes) if outcomes else "N/A"
+                except Exception as e:
+                    logger.warning(f"Error reading transcript for {call_uuid}: {e}")
+            
+            record["call_outcomes"] = call_outcomes
+            # Remove call_uuid from export
+            del record["call_uuid"]
+        
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.DictWriter(output, fieldnames=[
+            "customer_name", "phone_number", "whatsapp_number", "email",
+            "invoice_number", "invoice_date", "total_amount", "outstanding_balance",
+            "call_status", "created_at", "call_outcomes"
+        ])
+        
+        writer.writeheader()
+        writer.writerows(data)
+        
+        # Return as downloadable CSV
+        csv_content = output.getvalue()
+        output.close()
+        
+        return Response(
+            content=csv_content,
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=transcripts_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            }
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error exporting transcripts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# END EXPORT ENDPOINTS
+# ============================================================================
+
+
 @app.get("/audio/greeting.wav")
 async def serve_greeting_audio():
     """Serve the greeting audio file."""
@@ -428,7 +584,7 @@ async def process_single_call(call_data: dict) -> dict:
         
         # Build personalized greeting text
         balance_in_words = number_to_words(outstanding_balance) if outstanding_balance else "unknown"
-        greeting_text = f"Hi, this is Farooq from Hummingbird's commercial team. I'm calling regarding the TAC due of rupees {balance_in_words} for the invoice dated {invoice_date}. When can we expect the payment?"
+        greeting_text = f"Hi, this is Farooq from Hummingbird's commercial team. I'm calling regarding the T A C due of rupees {balance_in_words} for the invoice dated {invoice_date}. When can we expect the payment?"
         
         logger.info(f"Greeting text: {greeting_text}")
         
@@ -675,6 +831,20 @@ async def start_call(request: Request, current_user = Depends(get_current_user))
             created_at=created_at
         )
         
+        # Insert customer data (standard columns only)
+        db.insert_customer_data(
+            call_uuid=call_uuid,
+            customer_name=custom_data.get("customer_name", ""),
+            phone_number=phone_number,
+            whatsapp_number=custom_data.get("whatsapp_number", ""),
+            email=custom_data.get("email", ""),
+            invoice_number=custom_data.get("invoice_number", ""),
+            invoice_date=custom_data.get("invoice_date", ""),
+            total_amount=custom_data.get("total_amount", ""),
+            outstanding_balance=custom_data.get("outstanding_balance", ""),
+            created_at=created_at
+        )
+        
         logger.info(f"Initiating call {call_uuid} to {phone_number}")
         logger.info(f"Custom data received (customer info redacted for security)")
         
@@ -686,7 +856,7 @@ async def start_call(request: Request, current_user = Depends(get_current_user))
         
         # Build personalized greeting text
         balance_in_words = number_to_words(outstanding_balance) if outstanding_balance else "unknown"
-        greeting_text = f"Hi, this is Farooq from Hummingbird's commercial team. I'm calling regarding the TAC due of rupees {balance_in_words} for the invoice dated {invoice_date}. When can we expect the payment?"
+        greeting_text = f"Hi, this is Farooq from Hummingbird's commercial team. I'm calling regarding the T A C due of rupees {balance_in_words} for the invoice dated {invoice_date}. When can we expect the payment?"
         
         logger.info(f"Greeting text: {greeting_text}")
         
@@ -821,6 +991,20 @@ async def start_batch_calls(request: Request, current_user = Depends(get_current
                     invoice_number=custom_data.get("invoice_number", ""),
                     user_id=current_user["user_id"],
                     custom_data=custom_data,
+                    created_at=created_at
+                )
+                
+                # Insert customer data (standard columns only)
+                db.insert_customer_data(
+                    call_uuid=call_uuid,
+                    customer_name=custom_data.get("customer_name", ""),
+                    phone_number=phone_number,
+                    whatsapp_number=custom_data.get("whatsapp_number", ""),
+                    email=custom_data.get("email", ""),
+                    invoice_number=custom_data.get("invoice_number", ""),
+                    invoice_date=custom_data.get("invoice_date", ""),
+                    total_amount=custom_data.get("total_amount", ""),
+                    outstanding_balance=custom_data.get("outstanding_balance", ""),
                     created_at=created_at
                 )
                 
