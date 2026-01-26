@@ -314,43 +314,68 @@ async def export_call_status(
             filtered_data = []
             for record in data:
                 try:
-                    # Parse the created_at timestamp
-                    record_date = datetime.fromisoformat(record["created_at"].replace('Z', '+00:00'))
+                    # Parse the created_at timestamp - handle multiple formats
+                    created_at_str = record["created_at"]
+                    
+                    # Try different parsing methods
+                    try:
+                        # Try ISO format with timezone
+                        record_date = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                    except:
+                        try:
+                            # Try ISO format without timezone
+                            record_date = datetime.fromisoformat(created_at_str)
+                        except:
+                            # Try standard datetime parsing
+                            record_date = datetime.strptime(created_at_str, "%Y-%m-%d %H:%M:%S")
+                    
+                    # Make record_date timezone-naive for comparison
+                    if record_date.tzinfo is not None:
+                        record_date = record_date.replace(tzinfo=None)
+                    
+                    # Ensure comparison dates are also timezone-naive
+                    today = today.replace(tzinfo=None) if today.tzinfo else today
                     
                     if date_filter == "today":
                         if record_date >= today:
                             filtered_data.append(record)
                     elif date_filter == "yesterday":
                         yesterday = today - timedelta(days=1)
+                        yesterday = yesterday.replace(tzinfo=None) if yesterday.tzinfo else yesterday
                         if yesterday <= record_date < today:
                             filtered_data.append(record)
                     elif date_filter == "last7days":
                         last7days = today - timedelta(days=7)
+                        last7days = last7days.replace(tzinfo=None) if last7days.tzinfo else last7days
                         if record_date >= last7days:
                             filtered_data.append(record)
                     elif date_filter == "last30days":
                         last30days = today - timedelta(days=30)
+                        last30days = last30days.replace(tzinfo=None) if last30days.tzinfo else last30days
                         if record_date >= last30days:
                             filtered_data.append(record)
                     elif date_filter == "custom":
                         if start_date and end_date:
                             start = datetime.fromisoformat(start_date)
                             end = datetime.fromisoformat(end_date)
-                            end = end.replace(hour=23, minute=59, second=59)
+                            start = start.replace(tzinfo=None) if start.tzinfo else start
+                            end = end.replace(hour=23, minute=59, second=59, tzinfo=None)
                             if start <= record_date <= end:
                                 filtered_data.append(record)
                         elif start_date:
                             start = datetime.fromisoformat(start_date)
+                            start = start.replace(tzinfo=None) if start.tzinfo else start
                             if record_date >= start:
                                 filtered_data.append(record)
                         elif end_date:
                             end = datetime.fromisoformat(end_date)
-                            end = end.replace(hour=23, minute=59, second=59)
+                            end = end.replace(hour=23, minute=59, second=59, tzinfo=None)
                             if record_date <= end:
                                 filtered_data.append(record)
                 except Exception as e:
-                    logger.warning(f"Error parsing date for record: {e}")
-                    continue
+                    logger.warning(f"Error parsing date for record {record.get('invoice_number', 'unknown')}: {e}, date string: {record.get('created_at', 'N/A')}")
+                    # Include record if date parsing fails (don't filter out due to parsing error)
+                    filtered_data.append(record)
             
             data = filtered_data
         
@@ -545,44 +570,69 @@ async def export_transcripts(
             # Date filter
             if date_filter != "all":
                 try:
-                    record_date = datetime.fromisoformat(record["created_at"].replace('Z', '+00:00'))
+                    # Parse the created_at timestamp - handle multiple formats
+                    created_at_str = record["created_at"]
+                    
+                    # Try different parsing methods
+                    try:
+                        # Try ISO format with timezone
+                        record_date = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                    except:
+                        try:
+                            # Try ISO format without timezone
+                            record_date = datetime.fromisoformat(created_at_str)
+                        except:
+                            # Try standard datetime parsing
+                            record_date = datetime.strptime(created_at_str, "%Y-%m-%d %H:%M:%S")
+                    
+                    # Make record_date timezone-naive for comparison
+                    if record_date.tzinfo is not None:
+                        record_date = record_date.replace(tzinfo=None)
+                    
                     now = datetime.now()
                     today = datetime(now.year, now.month, now.day)
+                    today = today.replace(tzinfo=None) if today.tzinfo else today
                     
                     if date_filter == "today":
                         if record_date < today:
                             continue
                     elif date_filter == "yesterday":
                         yesterday = today - timedelta(days=1)
+                        yesterday = yesterday.replace(tzinfo=None) if yesterday.tzinfo else yesterday
                         if not (yesterday <= record_date < today):
                             continue
                     elif date_filter == "last7days":
                         last7days = today - timedelta(days=7)
+                        last7days = last7days.replace(tzinfo=None) if last7days.tzinfo else last7days
                         if record_date < last7days:
                             continue
                     elif date_filter == "last30days":
                         last30days = today - timedelta(days=30)
+                        last30days = last30days.replace(tzinfo=None) if last30days.tzinfo else last30days
                         if record_date < last30days:
                             continue
                     elif date_filter == "custom":
                         if start_date and end_date:
                             start = datetime.fromisoformat(start_date)
                             end = datetime.fromisoformat(end_date)
-                            end = end.replace(hour=23, minute=59, second=59)
+                            start = start.replace(tzinfo=None) if start.tzinfo else start
+                            end = end.replace(hour=23, minute=59, second=59, tzinfo=None)
                             if not (start <= record_date <= end):
                                 continue
                         elif start_date:
                             start = datetime.fromisoformat(start_date)
+                            start = start.replace(tzinfo=None) if start.tzinfo else start
                             if record_date < start:
                                 continue
                         elif end_date:
                             end = datetime.fromisoformat(end_date)
-                            end = end.replace(hour=23, minute=59, second=59)
+                            end = end.replace(hour=23, minute=59, second=59, tzinfo=None)
                             if record_date > end:
                                 continue
                 except Exception as e:
-                    logger.warning(f"Error parsing date for record: {e}")
-                    continue
+                    logger.warning(f"Error parsing date for record {record.get('invoice_number', 'unknown')}: {e}, date string: {record.get('created_at', 'N/A')}")
+                    # Don't filter out if date parsing fails - include the record
+                    pass
             
             # Search filter
             if search:
