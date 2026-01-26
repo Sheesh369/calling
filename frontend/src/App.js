@@ -1001,31 +1001,41 @@ export default function HummingBirdMultiAgent() {
             Refresh
           </button>
           <button
-            onClick={async () => {
+            onClick={() => {
               try {
-                // Build query params with all active filters
-                const params = new URLSearchParams();
-                params.append('status', statusFilter);
-                params.append('date_filter', dateFilter);
-                if (dateFilter === 'custom') {
-                  if (customStartDate) params.append('start_date', customStartDate);
-                  if (customEndDate) params.append('end_date', customEndDate);
-                }
+                // Get the filtered data that's currently displayed
+                const filteredData = callStatus.filter(call => 
+                  (statusFilter === 'all' || call.status === statusFilter) && 
+                  filterByDate(call.created_at)
+                );
                 
-                const response = await fetchWithAuth(`/api/export/call_status?${params.toString()}`);
-                if (response.ok) {
-                  const blob = await response.blob();
-                  const url = window.URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = `call_status_filtered_${new Date().toISOString().slice(0,10)}.csv`;
-                  document.body.appendChild(a);
-                  a.click();
-                  window.URL.revokeObjectURL(url);
-                  document.body.removeChild(a);
-                } else {
-                  alert('Export failed: ' + await response.text());
-                }
+                // Create CSV content
+                const headers = ['Customer Name', 'Phone Number', 'WhatsApp Number', 'Email', 'Invoice Number', 'Status', 'Created At'];
+                const csvRows = [headers.join(',')];
+                
+                filteredData.forEach(call => {
+                  const row = [
+                    `"${call.customer_name || ''}"`,
+                    `"${call.phone_number || ''}"`,
+                    `"${call.whatsapp_number || ''}"`,
+                    `"${call.email || ''}"`,
+                    `"${call.invoice_number || ''}"`,
+                    `"${call.status || ''}"`,
+                    `"${call.created_at || ''}"`
+                  ];
+                  csvRows.push(row.join(','));
+                });
+                
+                const csvContent = csvRows.join('\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `call_status_filtered_${new Date().toISOString().slice(0,10)}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
               } catch (err) {
                 alert('Error exporting: ' + err.message);
               }
@@ -1417,33 +1427,41 @@ export default function HummingBirdMultiAgent() {
                 Refresh
               </button>
               <button
-                onClick={async () => {
+                onClick={() => {
                   try {
-                    // Build query params with all active filters
-                    const params = new URLSearchParams();
-                    params.append('date_filter', dateFilter);
-                    if (dateFilter === 'custom') {
-                      if (customStartDate) params.append('start_date', customStartDate);
-                      if (customEndDate) params.append('end_date', customEndDate);
-                    }
-                    if (searchQuery) params.append('search', searchQuery);
-                    params.append('outcome', outcomeFilter);
-                    if (cutOffDateFilter) params.append('cutoff_date', cutOffDateFilter);
+                    // Export the filtered transcripts that are currently displayed
+                    const headers = ['Customer Name', 'Phone Number', 'WhatsApp Number', 'Email', 'Invoice Number', 'Status', 'Created At', 'Call Outcomes', 'Cut-off Date'];
+                    const csvRows = [headers.join(',')];
                     
-                    const response = await fetchWithAuth(`/api/export/transcripts?${params.toString()}`);
-                    if (response.ok) {
-                      const blob = await response.blob();
-                      const url = window.URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `transcripts_filtered_${new Date().toISOString().slice(0,10)}.csv`;
-                      document.body.appendChild(a);
-                      a.click();
-                      window.URL.revokeObjectURL(url);
-                      document.body.removeChild(a);
-                    } else {
-                      alert('Export failed: ' + await response.text());
-                    }
+                    filteredTranscripts.forEach(transcript => {
+                      const outcomes = Array.isArray(transcript.call_outcomes) 
+                        ? transcript.call_outcomes.join('; ') 
+                        : (transcript.call_outcomes || '');
+                      
+                      const row = [
+                        `"${transcript.customer_name || ''}"`,
+                        `"${transcript.phone_number || ''}"`,
+                        `"${transcript.whatsapp_number || ''}"`,
+                        `"${transcript.email || ''}"`,
+                        `"${transcript.invoice_number || ''}"`,
+                        `"${transcript.status || ''}"`,
+                        `"${transcript.created_at || ''}"`,
+                        `"${outcomes}"`,
+                        `"${transcript.cut_off_date || ''}"`
+                      ];
+                      csvRows.push(row.join(','));
+                    });
+                    
+                    const csvContent = csvRows.join('\n');
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `transcripts_filtered_${new Date().toISOString().slice(0,10)}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
                   } catch (err) {
                     alert('Error exporting: ' + err.message);
                   }
