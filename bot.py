@@ -675,12 +675,18 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool, custom_data: di
         )
 
     system_content += (
+        "CRITICAL DATE HANDLING: "
+        "When customer mentions a payment date (tomorrow, next week, Monday, etc.), calculate the actual date using today's date above. "
+        "Convert relative dates to specific dates in words for TTS. "
+        "Example: 'tomorrow' → 'January sixth, two thousand twenty-six' "
+        "Example: 'next Monday' → 'February third, two thousand twenty-six' "
+        "\n\n"
         "CRITICAL CONFIRMATION RULES: "
         "- When customer gives a payment date, DO NOT ask for confirmation "
-        "- Immediately respond: 'We'll expect the payment on [date]. Have a great day!' "
+        "- Immediately respond: 'We'll expect the payment on [actual date]. Have a great day!' "
         "- NO reconfirmation questions like 'correct?' or 'is that right?' "
         "\n\n"
-        "Your task: Ask when payment can be made. When they give a date, immediately say: 'We'll expect the payment on [date]. Have a great day!' and end the call. "
+        "Your task: Ask when payment can be made. When they give a date, convert it to the actual date and immediately say: 'We'll expect the payment on [actual date]. Have a great day!' and end the call. "
         "\n\n"
         "HUMAN AGENT ESCALATION: "
         "If the customer requests to speak with a human agent, manager, supervisor, or real person, respond with: "
