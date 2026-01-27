@@ -792,7 +792,7 @@ async def generate_greeting_audio(text: str, call_uuid: str) -> str:
         payload = {
             "inputs": [text],
             "target_language_code": "en-IN",
-            "speaker": "abhilash",  # Male voice - matches the bot's voice
+            "speaker": "anushka",  # Female voice - matches the bot's voice
             "pitch": 0,
             "pace": 1.0,
             "loudness": 1.5,
@@ -849,7 +849,7 @@ async def process_single_call(call_data: dict) -> dict:
         
         # Build personalized greeting text
         balance_in_words = number_to_words(outstanding_balance) if outstanding_balance else "unknown"
-        greeting_text = f"Hi, this is Farooq from Hummingbird's commercial team. I'm calling regarding the T A C due of rupees {balance_in_words} for the invoice dated {invoice_date}. When can we expect the payment?"
+        greeting_text = f"Hi, this is Sara from Hummingbird's commercial team. I'm calling regarding the T A C due of rupees {balance_in_words} for the invoice dated {invoice_date}. When can we expect the payment?"
         
         logger.info(f"Greeting text: {greeting_text}")
         
@@ -972,54 +972,6 @@ async def process_call_queue():
         except Exception as e:
             logger.error(f"Error in process_call_queue: {e}")
             await asyncio.sleep(1)
-    """Generate TTS audio using Sarvam AI and save to file"""
-    try:
-        logger.info(f"Generating greeting for call {call_uuid}: {text}")
-        
-        url = "https://api.sarvam.ai/text-to-speech"
-        
-        payload = {
-            "inputs": [text],
-            "target_language_code": "en-IN",
-            "speaker": "abhilash",  # Male voice - matches the bot's voice
-            "pitch": 0,
-            "pace": 1.0,
-            "loudness": 1.5,
-            "speech_sample_rate": 8000,
-            "enable_preprocessing": True,
-            "model": "bulbul:v2"
-        }
-        
-        headers = {
-            "Content-Type": "application/json", 
-            "API-Subscription-Key": SARVAM_API_KEY
-        }
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, json=payload, headers=headers, timeout=30.0)
-            response.raise_for_status()
-            response_data = response.json()
-        
-        # Audio is returned as base64 encoded string in the 'audios' list
-        audio_base64 = response_data["audios"][0]
-        audio_data = base64.b64decode(audio_base64)
-            
-        file_path = GREETINGS_DIR / f"{call_uuid}.wav"
-        
-        # Write to file
-        with open(file_path, "wb") as f:
-            f.write(audio_data)
-        
-        logger.info(f"Successfully generated greeting audio for call {call_uuid}")
-        return str(file_path)
-        
-    except httpx.HTTPStatusError as e:
-        logger.error(f"Sarvam AI API error for call {call_uuid}: {e.response.status_code} - {e.response.text}")
-        return None
-    except Exception as e:
-        logger.error(f"Error generating greeting audio for call {call_uuid}: {e}")
-        return None
-
 
 
 VERIFY_TOKEN = "aaqil123"  # Set this to the same value you provide in Meta dashboard
@@ -1121,7 +1073,7 @@ async def start_call(request: Request, current_user = Depends(get_current_user))
         
         # Build personalized greeting text
         balance_in_words = number_to_words(outstanding_balance) if outstanding_balance else "unknown"
-        greeting_text = f"Hi, this is Farooq from Hummingbird's commercial team. I'm calling regarding the T A C due of rupees {balance_in_words} for the invoice dated {invoice_date}. When can we expect the payment?"
+        greeting_text = f"Hi, this is Sara from Hummingbird's commercial team. I'm calling regarding the T A C due of rupees {balance_in_words} for the invoice dated {invoice_date}. When can we expect the payment?"
         
         logger.info(f"Greeting text: {greeting_text}")
         
