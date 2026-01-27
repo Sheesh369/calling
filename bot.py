@@ -253,6 +253,32 @@ async def generate_call_summary(transcript_file: str):
         with open(transcript_file, "r", encoding="utf-8") as f:
             content = f.read()
         
+        # Extract call date from metadata (for date calculation)
+        call_date_str = None
+        if "Started:" in content:
+            try:
+                # Extract the timestamp and convert to readable date
+                start = content.index("Started:") + len("Started:")
+                end = content.index("\n", start)
+                timestamp_str = content[start:end].strip()
+                timestamp = datetime.fromisoformat(timestamp_str)
+                india_tz = pytz.timezone('Asia/Kolkata')
+                if timestamp.tzinfo is None:
+                    timestamp = india_tz.localize(timestamp)
+                else:
+                    timestamp = timestamp.astimezone(india_tz)
+                call_date_str = timestamp.strftime("%A, %B %d, %Y")
+                logger.info(f"Extracted call date from transcript: {call_date_str}")
+            except Exception as e:
+                logger.warning(f"Could not extract call date from transcript: {e}")
+                # Fallback to current date
+                india_tz = pytz.timezone('Asia/Kolkata')
+                call_date_str = datetime.now(india_tz).strftime("%A, %B %d, %Y")
+        else:
+            # Fallback to current date
+            india_tz = pytz.timezone('Asia/Kolkata')
+            call_date_str = datetime.now(india_tz).strftime("%A, %B %d, %Y")
+        
         # Extract invoice date from metadata (for validation later)
         invoice_date = None
         if "Invoice Date:" in content:
@@ -318,12 +344,16 @@ async def generate_call_summary(transcript_file: str):
             logger.warning(f"Non-meaningful conversation in transcript: {transcript_file} (too short or no substantial messages)")
             summary_text = "**CALL OUTCOMES:**\n- NO_COMMITMENT\n\nConversation was too brief or did not contain meaningful dialogue."
         else:
-            # Create enhanced prompt for OpenAI with call outcome classification
+            # Create enhanced prompt for OpenAI with call outcome classification AND date extraction
             prompt = f"""Analyze this customer service call about payment reminder.
+
+CRITICAL CONTEXT:
+- Call date (today): {call_date_str}
+- Use this date to calculate any relative dates mentioned (tomorrow, next week, etc.)
 
 CRITICAL INSTRUCTIONS:
 - ONLY report what ACTUALLY happened in this conversation
-- Do NOT make assumptions about what was said before or after
+- If customer mentioned a relative date (tomorrow, next Monday, etc.), calculate the EXACT date
 - If the customer did not explicitly commit to a payment date, mark as NO_COMMITMENT
 - Be precise and factual
 
@@ -339,14 +369,9 @@ Determine ALL APPLICABLE CALL OUTCOMES (there may be multiple):
 
 IMPORTANT: A call can have MULTIPLE outcomes. For example, a customer might request a ledger AND commit to a payment date.
 
-Then provide your normal summary with these 5 points:
-1. Whether the customer was reached and verified
-2. Customer's response to the payment reminder
-3. Any commitments or next steps discussed (if customer mentioned a date, that's the PAYMENT CUT-OFF DATE)
-4. Overall outcome of the call
-5. Language used in the conversation (if multiple languages, mention the switch)
+FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
 
-Format your response EXACTLY like this:
+**EXTRACTED_DATE:** YYYY-MM-DD (or NONE if no payment commitment found)
 
 **CALL OUTCOMES:**
 - [outcome category 1]: [brief detail if applicable]
@@ -359,6 +384,13 @@ Format your response EXACTLY like this:
 4. **Overall Outcome**: ...
 5. **Language**: ...
 
+CRITICAL DATE EXTRACTION RULES:
+- If customer said "tomorrow" and today is January 27, 2026, EXTRACTED_DATE must be 2026-01-28
+- If customer said "next Monday" and today is Monday January 27, 2026, EXTRACTED_DATE must be 2026-02-03
+- If customer said "15th" or "January 15", EXTRACTED_DATE must be 2026-01-15 (or 2026-02-15 if 15th already passed)
+- If customer gave NO specific date commitment, EXTRACTED_DATE must be NONE
+- Always use YYYY-MM-DD format for EXTRACTED_DATE
+
 Keep the summary brief and professional."""
 
             # Call OpenAI API
@@ -369,11 +401,44 @@ Keep the summary brief and professional."""
                 model="gpt-4o",
                 messages=[
                     {"role": "user", "content": prompt}
-                ]
+                ],
+                temperature=0  # Deterministic output for date extraction
             )
             
             summary_text = response.choices[0].message.content
             logger.info(f"Summary generated successfully for {transcript_file}")
+            
+            # Extract the date from EXTRACTED_DATE line
+            extracted_date = None
+            if "**EXTRACTED_DATE:**" in summary_text:
+                try:
+                    # Find the EXTRACTED_DATE line (should be first line)
+                    lines = summary_text.split('\n')
+                    for line in lines:
+                        if "**EXTRACTED_DATE:**" in line:
+                            date_str = line.split("**EXTRACTED_DATE:**")[1].strip()
+                            if date_str != "NONE":
+                                # Validate it's a proper date format
+                                parsed_date = date_parser.parse(date_str, fuzzy=False)
+                                extracted_date = parsed_date.strftime("%Y-%m-%d")
+                                logger.info(f"Extracted payment date from AI: {extracted_date}")
+                            break
+                except Exception as e:
+                    logger.warning(f"Could not parse EXTRACTED_DATE: {e}")
+            
+            # If we extracted a date, ensure CUT_OFF_DATE_PROVIDED has it
+            if extracted_date and "CUT_OFF_DATE_PROVIDED" in summary_text:
+                # Replace the CUT_OFF_DATE_PROVIDED line to include the extracted date
+                summary_lines = summary_text.split('\n')
+                updated_lines = []
+                for line in summary_lines:
+                    if "CUT_OFF_DATE_PROVIDED" in line and ":" in line:
+                        # Replace with extracted date
+                        updated_lines.append(f"- CUT_OFF_DATE_PROVIDED: {extracted_date}")
+                    else:
+                        updated_lines.append(line)
+                summary_text = '\n'.join(updated_lines)
+                logger.info(f"Updated CUT_OFF_DATE_PROVIDED with extracted date: {extracted_date}")
             
             # POST-AI VALIDATION: Ensure CUT_OFF_DATE_PROVIDED has a valid date
             if "CUT_OFF_DATE_PROVIDED" in summary_text:
@@ -573,42 +638,42 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool, custom_data: di
     tamil_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="abhilash",
+        voice_id="anushka",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.TA)
     )
 
     english_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="abhilash",
+        voice_id="anushka",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.EN)
     )
 
     hindi_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="abhilash",
+        voice_id="anushka",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.HI)
     )
 
     telugu_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="abhilash",
+        voice_id="anushka",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.TE)
     )
 
     malayalam_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="abhilash",
+        voice_id="anushka",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.ML)
     )
 
     kannada_tts = SarvamTTSService(
         api_key=os.getenv("SARVAM_API_KEY"),
         model="bulbul:v2",
-        voice_id="abhilash",
+        voice_id="anushka",
         params=SarvamTTSService.InputParams(pace=0.9, language=Language.KN)
     )
 
@@ -676,17 +741,22 @@ async def run_bot(transport: BaseTransport, handle_sigint: bool, custom_data: di
 
     system_content += (
         "CRITICAL DATE HANDLING: "
-        "When customer mentions a payment date (tomorrow, next week, Monday, etc.), calculate the actual date using today's date above. "
-        "Convert relative dates to specific dates in words for TTS. "
-        "Example: 'tomorrow' → 'January sixth, two thousand twenty-six' "
-        "Example: 'next Monday' → 'February third, two thousand twenty-six' "
+        "When customer mentions a payment date (tomorrow, next week, Monday, etc.), you need to understand and remember it internally. "
+        "DO NOT say the date back to the customer. "
         "\n\n"
         "CRITICAL CONFIRMATION RULES: "
         "- When customer gives a payment date, DO NOT ask for confirmation "
-        "- Immediately respond: 'We'll expect the payment on [actual date]. Have a great day!' "
+        "- DO NOT repeat the date back to them "
+        "- Immediately respond: 'Great! Kindly release the payment as committed. Have a great day!' "
         "- NO reconfirmation questions like 'correct?' or 'is that right?' "
         "\n\n"
-        "Your task: Ask when payment can be made. When they give a date, convert it to the actual date and immediately say: 'We'll expect the payment on [actual date]. Have a great day!' and end the call. "
+        "Your task is to remind about the payment and help resolve any issues: "
+        "1. If customer requests invoice/ledger/documents: Confirm you'll send it and ask if they need anything else "
+        "2. If customer says 'I'll get back to you' or 'I need to check': Accept it gracefully, say 'Thank you, have a great day!' and end call "
+        "3. If customer gives a payment date: Say 'Great! Kindly release the payment as committed. Have a great day!' and end call (DO NOT mention the date) "
+        "4. If customer says already paid: Note it and say 'Thank you, we'll verify. Have a great day!' and end call "
+        "\n\n"
+        "DO NOT keep asking for payment date if customer has already given a valid response (document request, will get back, etc.). Be helpful, not pushy. "
         "\n\n"
         "HUMAN AGENT ESCALATION: "
         "If the customer requests to speak with a human agent, manager, supervisor, or real person, respond with: "
