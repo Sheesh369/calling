@@ -1593,13 +1593,23 @@ async def list_transcripts(user_id: int = None, current_user = Depends(get_curre
                     with open(transcript_file, "r", encoding="utf-8") as f:
                         content = f.read()
                     
+                    # Extract Started timestamp from transcript content (actual call time)
+                    started_time = None
+                    if "Started:" in content:
+                        try:
+                            start_idx = content.index("Started:") + len("Started:")
+                            end_idx = content.index("\n", start_idx)
+                            started_time = content[start_idx:end_idx].strip()
+                        except:
+                            pass
+                    
                     # Extract metadata from file
                     metadata = {
                         "filename": filename,
                         "invoice_number": invoice_number_from_filename,  # Will be overwritten if found in content
                         "call_uuid": call_uuid,
                         "file_size": transcript_file.stat().st_size,
-                        "created_at": datetime.fromtimestamp(transcript_file.stat().st_ctime).isoformat(),
+                        "created_at": started_time if started_time else datetime.fromtimestamp(transcript_file.stat().st_ctime).isoformat(),
                         "modified_at": datetime.fromtimestamp(transcript_file.stat().st_mtime).isoformat(),
                         "user_id": folder_user_id  # Add user_id to metadata
                     }
