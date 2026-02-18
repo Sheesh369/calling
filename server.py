@@ -1364,7 +1364,11 @@ async def plivo_hangup(call_uuid: str, request: Request):
         
         # Only update status if not already completed (avoid overwriting WebSocket status)
         current_status = call_data_store[call_uuid].get("status")
-        if current_status not in ["completed", "in_progress"]:
+        if current_status not in ["completed", "in_progress",
+                                   "completed_conversation", "completed_commitment",
+                                   "completed_partial", "abandoned_pre_greeting",
+                                   "abandoned_post_greeting", "abandoned_early",
+                                   "no_response"]:
             # Map hangup causes to specific statuses
             if hangup_cause_name == "Rejected" or hangup_cause_code == "3020":
                 status = "declined"
