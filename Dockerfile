@@ -46,7 +46,8 @@ RUN uv pip install --system --no-cache \
     "bcrypt>=4.0.0,<5.0.0" \
     pyjwt \
     "passlib[bcrypt]>=1.7.4" \
-    "python-dateutil>=2.8.2"
+    "python-dateutil>=2.8.2" \
+    "aiofiles>=23.2.1"
 
 # Copy all Python application files
 COPY bot.py ./
